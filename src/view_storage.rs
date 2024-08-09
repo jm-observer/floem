@@ -10,7 +10,7 @@ thread_local! {
 
 pub(crate) struct ViewStorage {
     pub(crate) taffy: Rc<RefCell<taffy::TaffyTree>>,
-    pub(crate) view_ids: SlotMap<ViewId, ()>,
+    pub(crate) view_ids: SlotMap<ViewId, (bool, Option<&'static str>)>,
     pub(crate) views: SecondaryMap<ViewId, Rc<RefCell<AnyView>>>,
     pub(crate) children: SecondaryMap<ViewId, Vec<ViewId>>,
     // the parent of a View

@@ -1,11 +1,14 @@
 use std::{any::Any, cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use crate::{
-    create_effect,
+    create_effect, create_signal_with_panic,
     id::Id,
     memo::{create_memo, Memo},
     runtime::RUNTIME,
-    signal::{create_rw_signal, create_signal, ReadSignal, RwSignal, Signal, WriteSignal},
+    signal::{
+        create_rw_signal, create_rw_signal_with_tracing, create_signal, ReadSignal, RwSignal,
+        Signal, WriteSignal,
+    },
     trigger::{create_trigger, Trigger},
 };
 
@@ -61,12 +64,32 @@ impl Scope {
         with_scope(self, || create_signal(value))
     }
 
+    /// This method is only for troubleshooting.
+    /// When you get an empty signal value, you can use this method to replace the original one,
+    /// Then you repeat the previous get action, and you will know where/when the signal is disposed.
+    pub fn create_signal_with_panic<T>(self, value: T) -> (ReadSignal<T>, WriteSignal<T>)
+    where
+        T: Any + 'static,
+    {
+        with_scope(self, || create_signal_with_panic(value))
+    }
+
     /// Create a RwSignal under this Scope
     pub fn create_rw_signal<T>(self, value: T) -> RwSignal<T>
     where
         T: Any + 'static,
     {
         with_scope(self, || create_rw_signal(value))
+    }
+
+    /// This method is only for troubleshooting.
+    /// When you get an empty signal value, you can use this method to replace the original one,
+    /// Then you repeat the previous get action, and you will know where/when the signal is disposed.
+    pub fn create_rw_signal_with_panic<T>(self, value: T) -> RwSignal<T>
+    where
+        T: Any + 'static,
+    {
+        with_scope(self, || create_rw_signal_with_tracing(value))
     }
 
     /// Create a Memo under this Scope

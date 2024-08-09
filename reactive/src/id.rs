@@ -4,13 +4,24 @@ use crate::{effect::observer_clean_up, runtime::RUNTIME, signal::Signal};
 
 /// An internal id which can reference a Signal/Effect/Scope.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
-pub(crate) struct Id(u64);
+pub(crate) struct Id(u64, bool);
 
 impl Id {
     /// Create a new Id that's next in order
     pub(crate) fn next() -> Id {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        Id(COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+        Id(
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            false,
+        )
+    }
+
+    pub(crate) fn next_with_tracing() -> Id {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        Id(
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            true,
+        )
     }
 
     /// Try to get the Signal that links with this Id
@@ -36,6 +47,9 @@ impl Id {
     /// Dispose the relevant resources that's linking to this Id, and the all the children
     /// and grandchildren.
     pub(crate) fn dispose(&self) {
+        if self.1 {
+            println!("dispose {:?}", self);
+        }
         if let Ok((children, signal)) = RUNTIME.try_with(|runtime| {
             (
                 runtime.children.borrow_mut().remove(self),

@@ -11,5 +11,8 @@ pub use context::{provide_context, use_context};
 pub use effect::{batch, create_effect, create_stateful_updater, create_updater, untrack};
 pub use memo::{create_memo, Memo};
 pub use scope::{as_child_of_current_scope, with_scope, Scope};
-pub use signal::{create_rw_signal, create_signal, ReadSignal, RwSignal, WriteSignal};
+pub use signal::{
+    create_rw_signal, create_rw_signal_with_tracing, create_signal, create_signal_with_panic,
+    ReadSignal, RwSignal, WriteSignal,
+};
 pub use trigger::{create_trigger, Trigger};

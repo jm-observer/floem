@@ -32,7 +32,34 @@ new_key_type! {
 
 impl ViewId {
     pub fn new() -> ViewId {
-        VIEW_STORAGE.with_borrow_mut(|s| s.view_ids.insert(()))
+        VIEW_STORAGE.with_borrow_mut(|s| s.view_ids.insert((false, None)))
+    }
+
+    pub fn tracing(&self, name: Option<&'static str>) {
+        VIEW_STORAGE.with_borrow_mut(|s| {
+            s.view_ids.get_mut(*self).and_then(|x| {
+                *x = (true, name);
+                None::<bool>
+            });
+        });
+    }
+
+    pub fn data_ffi(&self) -> u64 {
+        self.0.as_ffi()
+    }
+
+    pub fn is_catch(&self, name: Option<&str>) -> bool {
+        VIEW_STORAGE
+            .with_borrow(|x| {
+                x.view_ids.get(*self).map(|x| {
+                    if let Some(_) = name {
+                        x.0 && x.1 == name
+                    } else {
+                        x.0
+                    }
+                })
+            })
+            .unwrap_or(false)
     }
 
     pub fn remove(&self) {

@@ -32,6 +32,10 @@ raw-window-handle = "0.6.0"
 wgpu = { version = "22.0.0" }
 parking_lot = { version = "0.12.1" }
 swash = { version = "0.1.17" }
+[workspace.dependencies.tracing]
+git = "https://github.com/tokio-rs/tracing"
+rev = "908cc432a5994f6e17c8f36e13c217dc40085704"
+package = "tracing"
 
 [dependencies]
 slotmap = "1.0.7"
@@ -69,6 +73,7 @@ once_cell = { workspace = true }
 image = { workspace = true }
 im = { workspace = true }
 wgpu = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 default = ["editor", "default-image-formats"]

@@ -182,6 +182,29 @@ where
     }
 }
 
+/// It's the same as 'create_rw_signal', except this will panic when the signal is disposed.
+/// This method is only for troubleshooting.
+/// When you get an empty signal value, you can use this method to replace the original one,
+/// Then you repeat the previous get action, and you will know where/when the signal is disposed.
+#[allow(dead_code)]
+pub fn create_rw_signal_with_tracing<T>(value: T) -> RwSignal<T>
+where
+    T: Any + 'static,
+{
+    let id = Id::next_with_tracing();
+    let signal = Signal {
+        id,
+        subscribers: Rc::new(RefCell::new(HashMap::new())),
+        value: Rc::new(RefCell::new(value)),
+    };
+    id.add_signal(signal);
+    id.set_scope();
+    RwSignal {
+        id,
+        ty: PhantomData,
+    }
+}
+
 /// A getter only Signal
 pub struct ReadSignal<T> {
     pub(crate) id: Id,
@@ -319,6 +342,33 @@ where
     T: Any + 'static,
 {
     let id = Id::next();
+    let signal = Signal {
+        id,
+        subscribers: Rc::new(RefCell::new(HashMap::new())),
+        value: Rc::new(RefCell::new(value)),
+    };
+    id.add_signal(signal);
+    id.set_scope();
+    (
+        ReadSignal {
+            id,
+            ty: PhantomData,
+        },
+        WriteSignal {
+            id,
+            ty: PhantomData,
+        },
+    )
+}
+/// It's the same as 'create_signal', except this will panic when the signal is disposed.
+/// This method is only for troubleshooting.
+/// When you get an empty signal value, you can use this method to replace the original one,
+/// Then you repeat the previous get action, and you will know where/when the signal is disposed.
+pub fn create_signal_with_panic<T>(value: T) -> (ReadSignal<T>, WriteSignal<T>)
+where
+    T: Any + 'static,
+{
+    let id = Id::next_with_tracing();
     let signal = Signal {
         id,
         subscribers: Rc::new(RefCell::new(HashMap::new())),
