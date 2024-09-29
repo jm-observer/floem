@@ -940,7 +940,7 @@ impl<'a> PaintCx<'a> {
         let size = self.transform(id);
         let is_empty = self
             .clip
-            .map(|rect| rect.rect().intersect(size.to_rect()).is_empty())
+            .map(|rect| rect.rect().intersect(size.to_rect()).is_zero_area())
             .unwrap_or(false);
         if !is_empty {
             let style = view_state.borrow().combined_style.clone();
