@@ -70,6 +70,12 @@ wgpu = { workspace = true }
 futures = { version = "0.3.30", optional = true }
 crossbeam = "0.8"
 
+
+[dependencies.tracing]
+git     = "https://github.com/tokio-rs/tracing"
+rev     = "908cc432a5994f6e17c8f36e13c217dc40085704"
+package = "tracing"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { version = "0.4" }
 web-time = "1"
