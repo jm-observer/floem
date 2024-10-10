@@ -1212,7 +1212,7 @@ fn context_menu_view(
 
     use crate::{
         app::{add_app_update_event, AppUpdateEvent},
-        views::{dyn_stack, empty, svg, text},
+        views::{dyn_stack, empty, svg_from_string, text},
     };
 
     #[derive(Clone, PartialEq, Eq, Hash)]
@@ -1281,7 +1281,7 @@ fn context_menu_view(
                     stack((
                         stack((
                             text(title),
-                            svg(submenu_svg).style(move |s| {
+                            svg_from_string(submenu_svg).style(move |s| {
                                 s.size(20.0, 20.0)
                                     .color(Color::rgb8(201, 201, 201))
                                     .margin_right(10.0)
