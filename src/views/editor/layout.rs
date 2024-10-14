@@ -4,7 +4,7 @@ use crate::{
 };
 use floem_editor_core::buffer::rope_text::RopeText;
 
-use super::{phantom_text::PhantomTextLine, visual_line::TextLayoutProvider};
+use super::{Editor, phantom_text::PhantomTextLine, visual_line::TextLayoutProvider};
 
 #[derive(Clone, Debug)]
 pub struct LineExtraStyle {
@@ -51,7 +51,7 @@ impl TextLayoutLine {
     /// Iterator over the (start, end) columns of the relevant layouts.
     pub fn layout_cols<'a>(
         &'a self,
-        text_prov: impl TextLayoutProvider + 'a,
+        text_prov: &'a Editor,
         line: usize,
     ) -> impl Iterator<Item = (usize, usize)> + 'a {
         let mut prefix = None;
@@ -117,7 +117,7 @@ impl TextLayoutLine {
     /// Iterator over the start columns of the relevant layouts
     pub fn start_layout_cols<'a>(
         &'a self,
-        text_prov: impl TextLayoutProvider + 'a,
+        text_prov: &'a Editor,
         line: usize,
     ) -> impl Iterator<Item = usize> + 'a {
         self.layout_cols(text_prov, line).map(|(start, _)| start)
