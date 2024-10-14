@@ -3,12 +3,96 @@ use floem_winit::{
     window::Theme,
 };
 use peniko::kurbo::{Point, Size};
+use slotmap::Key;
 
 use crate::{
     dropped_file::DroppedFileEvent,
     keyboard::KeyEvent,
     pointer::{PointerInputEvent, PointerMoveEvent, PointerWheelEvent},
+    ViewId,
 };
+
+pub struct  EventResult(pub EventPropagation);
+
+impl EventResult {
+
+    pub fn event_continue() -> Self {
+        Self(EventPropagation::Continue)
+    }
+
+    pub fn event_stop(view_id: ViewId, event: &Event) -> Self {
+        use tracing::trace;
+                match event {
+                    Event::PointerDown(_) => {
+                        trace!("PointerDown processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::PointerUp(_) => {
+                        trace!("PointerUp processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::PointerMove(_) => {
+                        trace!("PointerMove processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::PointerWheel(_) => {
+                        trace!("PointerWheel processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::PointerLeave => {
+                        trace!("PointerLeave processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::DroppedFile(_) => {
+                        trace!("DroppedFile processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::KeyDown(_) => {
+                        trace!("KeyDown processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::KeyUp(_) => {
+                        trace!("KeyUp processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::ImeEnabled =>{
+                        trace!("ImeEnabled processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::ImeDisabled => {
+                        trace!("ImeDisabled processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::ImePreedit { .. } => {
+                        trace!("ImePreedit processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::ImeCommit(_) => {
+                        trace!("ImeCommit processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::WindowGotFocus => {
+                        trace!("WindowGotFocus processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::WindowLostFocus => {
+                        trace!("WindowLostFocus processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::WindowClosed =>{
+                        trace!("WindowClosed processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::WindowResized(_) => {
+                        trace!("WindowResized processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::WindowMoved(_) => {
+                        trace!("WindowMoved processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::WindowMaximizeChanged(_) => {
+                        trace!("WindowMaximizeChanged processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::ThemeChanged(_) => {
+                        trace!("ThemeChanged processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::FocusGained => {
+                        trace!("FocusGained processed by {}", view_id.data().as_ffi());
+                    }
+                    Event::FocusLost => {
+                        trace!("FocusLost processed by {}", view_id.data().as_ffi());
+                    }
+                }
+        Self(EventPropagation::Stop)
+    }
+    pub fn is_processed(&self) -> bool {
+        self.0.is_processed()
+    }
+}
 
 /// Control whether an event will continue propagating or whether it should stop.
 pub enum EventPropagation {

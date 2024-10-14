@@ -30,6 +30,7 @@ use crate::{
     view::{paint_bg, paint_border, paint_outline, View},
     view_state::ChangeFlags,
 };
+use crate::event::EventResult;
 
 pub type EventCallback = dyn FnMut(&Event) -> EventPropagation;
 pub type ResizeCallback = dyn Fn(Rect);
@@ -105,15 +106,15 @@ impl<'a> EventCx<'a> {
         view_id: ViewId,
         event: Event,
         directed: bool,
-    ) -> EventPropagation {
+    ) -> EventResult {
         if view_id.style_has_hidden() {
             // we don't process events for hidden view
-            return EventPropagation::Continue;
+            return EventResult::event_continue();
         }
         if self.app_state.is_disabled(&view_id) && !event.allow_disabled() {
             // if the view is disabled and the event is not processed
             // for disabled views
-            return EventPropagation::Continue;
+            return EventResult::event_continue();
         }
 
         // offset the event positions if the event has positions
@@ -129,7 +130,7 @@ impl<'a> EventCx<'a> {
         //         // but the parent just passed the event on,
         //         // so it's not really for this view and we stop
         //         // the event propagation.
-        //         return EventPropagation::Continue;
+        //         return EventResult::event_continue();
         //     }
 
         //     let id = id_path[0];
@@ -137,7 +138,7 @@ impl<'a> EventCx<'a> {
 
         //     if id != view.view_data().id() {
         //         // This shouldn't happen
-        //         return EventPropagation::Continue;
+        //         return EventResult::event_continue();
         //     }
 
         //     // we're the parent of the event destination, so pass it on to the child
@@ -146,7 +147,7 @@ impl<'a> EventCx<'a> {
         //             return self.unconditional_view_event(child, Some(id_path), event.clone());
         //         } else {
         //             // we don't have the child, stop the event propagation
-        //             return EventPropagation::Continue;
+        //             return EventResult::event_continue();
         //         }
         //     }
         // }
@@ -166,7 +167,7 @@ impl<'a> EventCx<'a> {
                     }
                 }
             }
-            return EventPropagation::Stop;
+            return EventResult::event_stop(view_id, &event);
         }
 
         if !directed {
@@ -177,7 +178,7 @@ impl<'a> EventCx<'a> {
                         .unconditional_view_event(child, event.clone(), false)
                         .is_processed()
                 {
-                    return EventPropagation::Stop;
+                    return EventResult::event_stop(view_id, &event);
                 }
             }
         }
@@ -193,7 +194,7 @@ impl<'a> EventCx<'a> {
         //     )
         //     .is_processed()
         // {
-        //     return EventPropagation::Stop;
+        //     return EventResult::event_stop(view_id);
         // }
 
         if view
@@ -201,37 +202,37 @@ impl<'a> EventCx<'a> {
             .event_after_children(self, &event)
             .is_processed()
         {
-            return EventPropagation::Stop;
+            return EventResult::event_stop(view_id, &event)
         }
 
         let view_state = view_id.state();
 
         match &event {
-            Event::PointerDown(event) => {
+            Event::PointerDown(pointer_down_event) => {
                 self.app_state.clicking.insert(view_id);
-                if event.button.is_primary() {
+                if pointer_down_event.button.is_primary() {
                     let rect = view_id.get_size().unwrap_or_default().to_rect();
-                    let now_focused = rect.contains(event.pos);
+                    let now_focused = rect.contains(pointer_down_event.pos);
 
                     if now_focused {
                         if self.app_state.keyboard_navigable.contains(&view_id) {
                             // if the view can be focused, we update the focus
                             self.app_state.update_focus(view_id, false);
                         }
-                        if event.count == 2
+                        if pointer_down_event.count == 2
                             && view_state
                                 .borrow()
                                 .event_listeners
                                 .contains_key(&EventListener::DoubleClick)
                         {
-                            view_state.borrow_mut().last_pointer_down = Some(event.clone());
+                            view_state.borrow_mut().last_pointer_down = Some(pointer_down_event.clone());
                         }
                         if view_state
                             .borrow()
                             .event_listeners
                             .contains_key(&EventListener::Click)
                         {
-                            view_state.borrow_mut().last_pointer_down = Some(event.clone());
+                            view_state.borrow_mut().last_pointer_down = Some(pointer_down_event.clone());
                         }
 
                         let bottom_left = {
@@ -241,17 +242,17 @@ impl<'a> EventCx<'a> {
                         let popout_menu = view_state.borrow().popout_menu.clone();
                         if let Some(menu) = popout_menu {
                             show_context_menu(menu(), Some(bottom_left));
-                            return EventPropagation::Stop;
+                            return EventResult::event_stop(view_id, &event);
                         }
                         if self.app_state.draggable.contains(&view_id)
                             && self.app_state.drag_start.is_none()
                         {
-                            self.app_state.drag_start = Some((view_id, event.pos));
+                            self.app_state.drag_start = Some((view_id, pointer_down_event.pos));
                         }
                     }
-                } else if event.button.is_secondary() {
+                } else if pointer_down_event.button.is_secondary() {
                     let rect = view_id.get_size().unwrap_or_default().to_rect();
-                    let now_focused = rect.contains(event.pos);
+                    let now_focused = rect.contains(pointer_down_event.pos);
 
                     if now_focused {
                         if self.app_state.keyboard_navigable.contains(&view_id) {
@@ -263,7 +264,7 @@ impl<'a> EventCx<'a> {
                             .event_listeners
                             .contains_key(&EventListener::SecondaryClick)
                         {
-                            view_state.borrow_mut().last_pointer_down = Some(event.clone());
+                            view_state.borrow_mut().last_pointer_down = Some(pointer_down_event.clone());
                         }
                     }
                 }
@@ -321,7 +322,7 @@ impl<'a> EventCx<'a> {
                     .apply_event(&EventListener::PointerMove, &event)
                     .is_some_and(|prop| prop.is_processed())
                 {
-                    return EventPropagation::Stop;
+                    return EventResult::event_stop(view_id, &event);
                 }
             }
             Event::PointerUp(pointer_event) => {
@@ -370,7 +371,7 @@ impl<'a> EventCx<'a> {
                                 handled | (handler.borrow_mut())(&event).is_processed()
                             })
                         {
-                            return EventPropagation::Stop;
+                            return EventResult::event_stop(view_id, &event);
                         }
                     }
 
@@ -382,7 +383,7 @@ impl<'a> EventCx<'a> {
                                 handled | (handler.borrow_mut())(&event).is_processed()
                             })
                         {
-                            return EventPropagation::Stop;
+                            return EventResult::event_stop(view_id, &event);
                         }
                     }
 
@@ -390,7 +391,7 @@ impl<'a> EventCx<'a> {
                         .apply_event(&EventListener::PointerUp, &event)
                         .is_some_and(|prop| prop.is_processed())
                     {
-                        return EventPropagation::Stop;
+                        return EventResult::event_stop(view_id, &event);
                     }
                 } else if pointer_event.button.is_secondary() {
                     let rect = view_id.get_size().unwrap_or_default().to_rect();
@@ -405,7 +406,7 @@ impl<'a> EventCx<'a> {
                                 handled | (handler.borrow_mut())(&event).is_processed()
                             })
                         {
-                            return EventPropagation::Stop;
+                            return EventResult::event_stop(view_id, &event);
                         }
                     }
 
@@ -419,7 +420,7 @@ impl<'a> EventCx<'a> {
                     let context_menu = view_state.borrow().context_menu.clone();
                     if let Some(menu) = context_menu {
                         show_context_menu(menu(), Some(viewport_event_position));
-                        return EventPropagation::Stop;
+                        return EventResult::event_stop(view_id, &event);
                     }
                 }
             }
@@ -450,12 +451,12 @@ impl<'a> EventCx<'a> {
                         handled | (handler.borrow_mut())(&event).is_processed()
                     })
                 {
-                    return EventPropagation::Stop;
+                    return EventResult::event_stop(view_id, &event);
                 }
             }
         }
 
-        EventPropagation::Continue
+        EventResult::event_continue()
     }
 
     /// translate a window-positioned event to the local coordinate system of a view
