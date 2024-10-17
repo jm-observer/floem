@@ -15,6 +15,7 @@ lapce-xi-rope = { workspace = true }
 itertools = "0.12.1"
 bitflags = "2.4.2"
 memchr = "2.7.1"
+tracing = { workspace = true }
 
 [features]
 serde = ["dep:serde"]
