@@ -127,7 +127,7 @@ impl Action {
                     // wrap the text with that char and its corresponding closing pair
                     if region.start != region.end
                         && auto_surround
-                        && (matching_pair_type == Some(true) || c == '"' || c == '\'')
+                        && (matching_pair_type == Some(true) || c == '"' || c == '\'' || c == '`')
                     {
                         edits.push((Selection::region(region.min(), region.min()), c.to_string()));
                         edits_after.push((
@@ -179,12 +179,13 @@ impl Action {
                             }
                         }
 
-                        if matching_pair_type == Some(true) || c == '"' || c == '\'' {
+                        if matching_pair_type == Some(true) || c == '"' || c == '\'' || c == '`'{
                             // Create a late edit to insert the closing pair, if allowed.
                             let is_whitespace_or_punct = cursor_char
                                 .map(|c| {
                                     let prop = get_char_property(c);
                                     prop == CharClassification::Lf
+                                        || prop == CharClassification::Cr
                                         || prop == CharClassification::Space
                                         || prop == CharClassification::Punctuation
                                 })
@@ -197,6 +198,7 @@ impl Action {
                                             .map(|c| {
                                                 let prop = get_char_property(c);
                                                 prop == CharClassification::Lf
+                                                    || prop == CharClassification::Cr
                                                     || prop == CharClassification::Space
                                                     || prop == CharClassification::Punctuation
                                             })
