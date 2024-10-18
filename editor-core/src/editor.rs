@@ -329,6 +329,7 @@ impl Action {
         let mut edits = Vec::with_capacity(selection.regions().len());
         let mut extra_edits = Vec::new();
         let mut shift = 0i32;
+        let line_ending = buffer.line_ending().get_chars();
         for region in selection.regions() {
             let offset = region.max();
             let line = buffer.line_of_offset(offset);
@@ -358,7 +359,7 @@ impl Action {
                     indent_storage = String::new();
                     &indent_storage
                 };
-                format!("\n{indent}")
+                format!("{line_ending}{indent}")
             };
 
             let selection = Selection::region(region.min(), region.max());
@@ -374,7 +375,7 @@ impl Action {
                         if second_half.starts_with(c) {
                             let selection =
                                 Selection::caret((region.max() as i32 + shift) as usize);
-                            let content = format!("\n{line_indent}");
+                            let content = format!("{line_ending}{line_indent}", );
                             extra_edits.push((selection, content));
                         }
                     }
