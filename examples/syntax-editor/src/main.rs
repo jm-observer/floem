@@ -1,7 +1,7 @@
+use floem::cosmic_text::{Attrs, AttrsList, Stretch, Style, Weight};
 use floem::keyboard::Modifiers;
 use floem::peniko::Color;
-use floem::reactive::{RwSignal, SignalGet, SignalUpdate};
-use floem::text::{Attrs, AttrsList, Stretch, Style, Weight};
+use floem::reactive::RwSignal;
 use floem::views::button;
 use floem::views::editor::core::buffer::rope_text::RopeText;
 use floem::views::editor::id::EditorId;
@@ -9,8 +9,8 @@ use floem::views::editor::layout::TextLayoutLine;
 use floem::views::editor::text::{default_dark_color, Document, SimpleStylingBuilder, Styling};
 use floem::views::editor::EditorStyle;
 use floem::{
+    cosmic_text::FamilyOwned,
     keyboard::{Key, NamedKey},
-    text::FamilyOwned,
     views::{
         editor::{
             core::{editor::EditType, selection::Selection},
@@ -136,17 +136,17 @@ impl<'a> Styling for SyntaxHighlightingStyle<'a> {
                         ) {
                             let mut attr = default;
                             if style.font_style.contains(FontStyle::ITALIC) {
-                                attr = attr.style(Style::Italic);
+                                attr.style = Style::Italic;
                             }
                             if style.font_style.contains(FontStyle::BOLD) {
-                                attr = attr.weight(Weight::BOLD);
+                                attr.weight = Weight::BOLD;
                             }
-                            attr = attr.color(Color::rgba8(
+                            attr.color = Color::rgba8(
                                 style.foreground.r,
                                 style.foreground.g,
                                 style.foreground.b,
                                 style.foreground.a,
-                            ));
+                            );
 
                             attrs.add_span(range, attr);
                         }
@@ -228,14 +228,15 @@ mod tests {
     let view = stack((
         editor,
         stack((
-            button("Clear").action(move || {
+            button(|| "Clear").on_click_stop(move |_| {
                 doc.edit_single(
+                    None,
                     Selection::region(0, doc.text().len()),
                     "",
                     EditType::DeleteSelection,
                 );
             }),
-            button("Gutter").action(move || {
+            button(|| "Gutter").on_click_stop(move |_| {
                 hide_gutter.update(|hide| *hide = !*hide);
             }),
         ))

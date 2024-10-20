@@ -1,6 +1,6 @@
 use floem::{
     keyboard::{Key, Modifiers, NamedKey},
-    reactive::{RwSignal, SignalGet, SignalUpdate},
+    reactive::RwSignal,
     views::{
         button,
         editor::{
@@ -50,14 +50,15 @@ fn app_view() -> impl IntoView {
         editor_a,
         editor_b,
         stack((
-            button("Clear").action(move || {
+            button(|| "Clear").on_click_stop(move |_| {
                 doc.edit_single(
+                    None,
                     Selection::region(0, doc.text().len()),
                     "",
                     EditType::DeleteSelection,
                 );
             }),
-            button("Flip Gutter").action(move || {
+            button(|| "Flip Gutter").on_click_stop(move |_| {
                 hide_gutter_a.update(|hide| *hide = !*hide);
                 hide_gutter_b.update(|hide| *hide = !*hide);
             }),

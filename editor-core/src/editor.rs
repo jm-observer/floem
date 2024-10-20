@@ -4,7 +4,7 @@ use itertools::Itertools;
 use lapce_xi_rope::{DeltaElement, Rope, RopeDelta};
 
 use crate::{
-    buffer::{rope_text::RopeText, Buffer, InvalLines},
+    buffer::{rope_text::RopeText, Buffer, InvalLinesR},
     command::EditCommand,
     cursor::{get_first_selection_after, Cursor, CursorMode},
     mode::{Mode, MotionMode, VisualMode},
@@ -93,7 +93,7 @@ impl Action {
         prev_unmatched: &dyn Fn(&Buffer, char, usize) -> Option<usize>,
         auto_closing_matching_pairs: bool,
         auto_surround: bool,
-    ) -> Vec<(Rope, RopeDelta, InvalLines)> {
+    ) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
         let mut deltas = Vec::new();
         if let CursorMode::Insert(selection) = &cursor.mode {
             if s.chars().count() != 1 {
@@ -127,7 +127,7 @@ impl Action {
                     // wrap the text with that char and its corresponding closing pair
                     if region.start != region.end
                         && auto_surround
-                        && (matching_pair_type == Some(true) || c == '"' || c == '\'' || c == '`')
+                        && (matching_pair_type == Some(true) || c == '"' || c == '\'')
                     {
                         edits.push((Selection::region(region.min(), region.min()), c.to_string()));
                         edits_after.push((
@@ -179,13 +179,12 @@ impl Action {
                             }
                         }
 
-                        if matching_pair_type == Some(true) || c == '"' || c == '\'' || c == '`'{
+                        if matching_pair_type == Some(true) || c == '"' || c == '\'' {
                             // Create a late edit to insert the closing pair, if allowed.
                             let is_whitespace_or_punct = cursor_char
                                 .map(|c| {
                                     let prop = get_char_property(c);
                                     prop == CharClassification::Lf
-                                        || prop == CharClassification::Cr
                                         || prop == CharClassification::Space
                                         || prop == CharClassification::Punctuation
                                 })
@@ -198,7 +197,6 @@ impl Action {
                                             .map(|c| {
                                                 let prop = get_char_property(c);
                                                 prop == CharClassification::Lf
-                                                    || prop == CharClassification::Cr
                                                     || prop == CharClassification::Space
                                                     || prop == CharClassification::Punctuation
                                             })
@@ -325,11 +323,10 @@ impl Action {
         selection: Selection,
         keep_indent: bool,
         auto_indent: bool,
-    ) -> Vec<(Rope, RopeDelta, InvalLines)> {
+    ) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
         let mut edits = Vec::with_capacity(selection.regions().len());
         let mut extra_edits = Vec::new();
         let mut shift = 0i32;
-        let line_ending = buffer.line_ending().get_chars();
         for region in selection.regions() {
             let offset = region.max();
             let line = buffer.line_of_offset(offset);
@@ -359,7 +356,7 @@ impl Action {
                     indent_storage = String::new();
                     &indent_storage
                 };
-                format!("{line_ending}{indent}")
+                format!("\n{indent}")
             };
 
             let selection = Selection::region(region.min(), region.max());
@@ -375,7 +372,7 @@ impl Action {
                         if second_half.starts_with(c) {
                             let selection =
                                 Selection::caret((region.max() as i32 + shift) as usize);
-                            let content = format!("{line_ending}{line_indent}", );
+                            let content = format!("\n{line_indent}");
                             extra_edits.push((selection, content));
                         }
                     }
@@ -414,7 +411,7 @@ impl Action {
         range: Range<usize>,
         is_vertical: bool,
         register: &mut Register,
-    ) -> Vec<(Rope, RopeDelta, InvalLines)> {
+    ) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
         let mut deltas = Vec::new();
         match motion_mode {
             MotionMode::Delete { .. } => {
@@ -474,7 +471,7 @@ impl Action {
         selection: &Selection,
         content: &str,
         mode: VisualMode,
-    ) -> (Rope, RopeDelta, InvalLines) {
+    ) -> (Rope, RopeDelta, InvalLinesR) {
         if selection.len() > 1 {
             let line_ends: Vec<_> = content.match_indices('\n').map(|(idx, _)| idx).collect();
 
@@ -554,7 +551,7 @@ impl Action {
         cursor: &mut Cursor,
         buffer: &mut Buffer,
         data: &RegisterData,
-    ) -> Vec<(Rope, RopeDelta, InvalLines)> {
+    ) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
         let mut deltas = Vec::new();
         match data.mode {
             VisualMode::Normal => {
@@ -641,7 +638,7 @@ impl Action {
         deltas
     }
 
-    fn do_indent(buffer: &mut Buffer, selection: Selection) -> (Rope, RopeDelta, InvalLines) {
+    fn do_indent(buffer: &mut Buffer, selection: Selection) -> (Rope, RopeDelta, InvalLinesR) {
         let indent = buffer.indent_unit();
         let mut edits = Vec::new();
 
@@ -657,8 +654,7 @@ impl Action {
             }
             for line in start_line..=end_line {
                 if lines.insert(line) {
-                    let line_content = buffer.line_content(line);
-                    if line_content == "\n" || line_content == "\r\n" {
+                    if buffer.is_line_empty(line) {
                         continue;
                     }
                     let nonblank = buffer.first_non_blank_character_on_line(line);
@@ -671,7 +667,7 @@ impl Action {
         buffer.edit(&edits, EditType::Indent)
     }
 
-    fn do_outdent(buffer: &mut Buffer, selection: Selection) -> (Rope, RopeDelta, InvalLines) {
+    fn do_outdent(buffer: &mut Buffer, selection: Selection) -> (Rope, RopeDelta, InvalLinesR) {
         let indent = buffer.indent_unit();
         let mut edits = Vec::new();
 
@@ -687,8 +683,7 @@ impl Action {
             }
             for line in start_line..=end_line {
                 if lines.insert(line) {
-                    let line_content = buffer.line_content(line);
-                    if line_content == "\n" || line_content == "\r\n" {
+                    if buffer.is_line_empty(line) {
                         continue;
                     }
                     let nonblank = buffer.first_non_blank_character_on_line(line);
@@ -706,7 +701,7 @@ impl Action {
         cursor: &mut Cursor,
         buffer: &mut Buffer,
         direction: DuplicateDirection,
-    ) -> Vec<(Rope, RopeDelta, InvalLines)> {
+    ) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
         // TODO other modes
         let selection = match cursor.mode {
             CursorMode::Insert(ref mut sel) => sel,
@@ -762,7 +757,7 @@ impl Action {
             keep_indent,
             auto_indent,
         }: EditConf,
-    ) -> Vec<(Rope, RopeDelta, InvalLines)> {
+    ) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
         use crate::command::EditCommand::*;
         match cmd {
             MoveLineUp => {
@@ -1050,10 +1045,7 @@ impl Action {
                 }
                 vec![]
             }
-            Paste => {
-                let data = register.unnamed.clone();
-                Self::do_paste(cursor, buffer, &data)
-            }
+            Paste => Self::do_paste(cursor, buffer, &register.unnamed),
             PasteBefore => {
                 let offset = cursor.offset();
                 let data = register.unnamed.clone();
@@ -1486,9 +1478,9 @@ fn apply_undo_redo(
     modal: bool,
     text: Rope,
     delta: RopeDelta,
-    inval_lines: InvalLines,
+    inval_lines: InvalLinesR,
     cursor_mode: Option<CursorMode>,
-) -> Vec<(Rope, RopeDelta, InvalLines)> {
+) -> Vec<(Rope, RopeDelta, InvalLinesR)> {
     if let Some(cursor_mode) = cursor_mode {
         cursor.mode = if modal {
             CursorMode::Normal(cursor_mode.offset())

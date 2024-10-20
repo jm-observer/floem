@@ -1,10 +1,10 @@
 use crate::{
-    peniko::Color,
     text::{LayoutLine, TextLayout},
+    peniko::Color,
 };
-use floem_editor_core::buffer::rope_text::RopeText;
+use floem_editor_core::buffer::rope_text::{RopeText, RopeTextVal};
 
-use super::{Editor, phantom_text::PhantomTextLine, visual_line::TextLayoutProvider};
+use super::{phantom_text::PhantomTextLine, visual_line::TextLayoutProvider};
 
 #[derive(Clone, Debug)]
 pub struct LineExtraStyle {
@@ -51,14 +51,38 @@ impl TextLayoutLine {
     /// Iterator over the (start, end) columns of the relevant layouts.
     pub fn layout_cols<'a>(
         &'a self,
-        text_prov: &'a Editor,
+        text_prov: impl TextLayoutProvider + 'a,
         line: usize,
+    ) -> impl Iterator<Item = (usize, usize)> + 'a {
+        let text = text_prov.rope_text();
+        self.layout_cols_rope(text_prov, text, line)
+    }
+
+    pub(crate) fn layout_cols_rope<'a>(
+        &'a self,
+        text_prov: impl TextLayoutProvider + 'a,
+        text: RopeTextVal,
+        line: usize,
+    ) -> impl Iterator<Item = (usize, usize)> + 'a {
+        let (line_offset, line_end_offset, _) = text.line_offsets(line, true);
+
+        self.layout_cols_offsets(text_prov, text, line, line_offset, line_end_offset)
+    }
+
+    pub(crate) fn layout_cols_offsets<'a>(
+        &'a self,
+        text_prov: impl TextLayoutProvider + 'a,
+        text: RopeTextVal,
+        line: usize,
+        line_offset: usize,
+        line_end_offset: usize,
     ) -> impl Iterator<Item = (usize, usize)> + 'a {
         let mut prefix = None;
         // Include an entry if there is nothing
-        if self.text.lines().len() == 1 {
-            let line_start = self.text.lines_range()[0].start;
-            if let Some(layouts) = self.text.lines()[0].layout_opt().as_deref() {
+        let lines = self.text.lines();
+        if lines.len() == 1 {
+            let line_start = lines[0].start_index();
+            if let Some(layouts) = lines[0].layout_opt().as_deref() {
                 // Do we need to require !layouts.is_empty()?
                 if !layouts.is_empty() && layouts.iter().all(|l| l.glyphs.is_empty()) {
                     // We assume the implicit glyph start is zero
@@ -68,38 +92,25 @@ impl TextLayoutLine {
         }
 
         let line_v = line;
-        let iter = self
-            .text
-            .lines()
+        let iter = lines
             .iter()
-            .zip(self.text.lines_range().iter())
-            .filter_map(|(line, line_range)| {
-                line.layout_opt()
-                    .as_deref()
-                    .map(|ls| (line, line_range, ls))
-            })
-            .flat_map(|(line, line_range, ls)| ls.iter().map(move |l| (line, line_range, l)))
-            .filter(|(_, _, l)| !l.glyphs.is_empty())
-            .map(move |(tl_line, line_range, l)| {
-                let line_start = line_range.start;
-                tl_line.align();
+            .filter_map(|line| line.layout_opt().as_deref().map(|ls| (line, ls)))
+            .flat_map(|(line, ls)| ls.iter().map(move |l| (line, l)))
+            .filter(|(_, l)| !l.glyphs.is_empty())
+            .map(move |(tl_line, l)| {
+                let line_start = tl_line.start_index();
 
                 let start = line_start + l.glyphs[0].start;
                 let end = line_start + l.glyphs.last().unwrap().end;
 
-                let text = text_prov.rope_text();
                 // We can't just use the original end, because the *true* last glyph on the line
                 // may be a space, but it isn't included in the layout! Though this only happens
                 // for single spaces, for some reason.
                 let pre_end = text_prov.before_phantom_col(line_v, end);
-                let line_offset = text.offset_of_line(line);
 
-                // TODO(minor): We don't really need the entire line, just the two characters after
-                let line_end = text.line_end_col(line, true);
-
-                let end = if pre_end <= line_end {
-                    let after = text.slice_to_cow(line_offset + pre_end..line_offset + line_end);
-                    if after.starts_with(' ') && !after.starts_with("  ") {
+                let end = if pre_end <= line_end_offset - line_offset {
+                    let mut after = text.chars(line_offset + pre_end..line_end_offset);
+                    if after.next() == Some(' ') && after.next() != Some(' ') {
                         end + 1
                     } else {
                         end
@@ -117,24 +128,51 @@ impl TextLayoutLine {
     /// Iterator over the start columns of the relevant layouts
     pub fn start_layout_cols<'a>(
         &'a self,
-        text_prov: &'a Editor,
+        text_prov: impl TextLayoutProvider + 'a,
         line: usize,
     ) -> impl Iterator<Item = usize> + 'a {
         self.layout_cols(text_prov, line).map(|(start, _)| start)
     }
 
+    pub(crate) fn start_layout_cols_rope<'a>(
+        &'a self,
+        text_prov: impl TextLayoutProvider + 'a,
+        text: &RopeTextVal,
+        line: usize,
+    ) -> impl Iterator<Item = usize> + 'a {
+        self.layout_cols_rope(text_prov, text.clone(), line)
+            .map(|(start, _)| start)
+    }
+
     /// Get the top y position of the given line index
-    pub fn get_layout_y(&self, nth: usize) -> Option<f32> {
-        self.text.layout_runs().nth(nth).map(|run| run.line_y)
+    pub fn get_layout_y(&self, nth: usize) -> Option<f64> {
+        if nth == 0 {
+            return Some(0.0);
+        }
+
+        let mut line_y = 0.0;
+        for (i, layout) in self.relevant_layouts().enumerate() {
+            // This logic matches how layout run iter computes the line_y
+            let line_height = layout.line_ascent + layout.line_descent;
+            if i == nth {
+                let offset = (line_height - (layout.glyph_ascent + layout.glyph_descent)) / 2.0;
+
+                return Some((line_y - offset - layout.glyph_descent) as f64);
+            }
+
+            line_y += line_height;
+        }
+
+        None
     }
 
     /// Get the (start x, end x) positions of the given line index
     pub fn get_layout_x(&self, nth: usize) -> Option<(f32, f32)> {
-        self.text.layout_runs().nth(nth).map(|run| {
-            (
-                run.glyphs.first().map(|g| g.x).unwrap_or(0.0),
-                run.glyphs.last().map(|g| g.x + g.w).unwrap_or(0.0),
-            )
-        })
+        let layout = self.relevant_layouts().nth(nth)?;
+
+        let start = layout.glyphs.first().map(|g| g.x).unwrap_or(0.0);
+        let end = layout.glyphs.last().map(|g| g.x + g.w).unwrap_or(0.0);
+
+        Some((start, end))
     }
 }

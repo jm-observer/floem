@@ -1,24 +1,16 @@
-use core::indent::IndentStyle;
-use std::{
-    cell::{Cell, RefCell},
-    cmp::Ordering,
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::{Hash, Hasher},
-    rc::Rc,
-    sync::Arc,
-    time::Duration,
-};
+use core::{buffer::InvalLines, indent::IndentStyle};
+use std::{cell::Cell, cmp::Ordering, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 use crate::{
     action::{exec_after, TimerToken},
+    text::{Attrs, AttrsList, LineHeightValue, TextLayout, Wrap},
     keyboard::Modifiers,
     kurbo::{Point, Rect, Vec2},
     peniko::Color,
     pointer::{PointerButton, PointerInputEvent, PointerMoveEvent},
     prop, prop_extractor,
-    reactive::{batch, untrack, ReadSignal, RwSignal, Scope},
+    reactive::{batch, untrack, RwSignal, Scope},
     style::{CursorColor, StylePropValue, TextColor},
-    text::{Attrs, AttrsList, LineHeightValue, TextLayout, Wrap},
     view::{IntoView, View},
     views::text,
 };
@@ -42,6 +34,7 @@ pub mod gutter;
 pub mod id;
 pub mod keypress;
 pub mod layout;
+pub mod line_render_cache;
 pub mod listener;
 pub mod movement;
 pub mod phantom_text;
@@ -51,7 +44,6 @@ pub mod view;
 pub mod visual_line;
 
 pub use floem_editor_core as core;
-use peniko::Brush;
 
 use self::{
     command::Command,
@@ -61,8 +53,8 @@ use self::{
     text::{Document, Preedit, PreeditData, RenderWhitespace, Styling, WrapMethod},
     view::{LineInfo, ScreenLines, ScreenLinesBase},
     visual_line::{
-        hit_position_aff, ConfigId, FontSizeCacheId, LayoutEvent, LineFontSizeProvider, Lines,
-        RVLine, ResolvedWrap, TextLayoutProvider, VLine, VLineInfo,
+        hit_position_aff, ConfigId, LayoutEvent, Lines, RVLine, ResolvedWrap, TextLayoutProvider,
+        VLine, VLineInfo,
     },
 };
 
@@ -134,7 +126,7 @@ impl EditorStyle {
     }
 }
 impl EditorStyle {
-    pub fn ed_caret(&self) -> Brush {
+    pub fn ed_caret(&self) -> Color {
         self.caret()
     }
 }
@@ -174,7 +166,7 @@ pub struct Editor {
     pub scroll_to: RwSignal<Option<Vec2>>,
 
     /// Holds the cache of the lines and provides many utility functions for them.
-    lines: Rc<Lines>,
+    pub lines: Rc<Lines>,
     pub screen_lines: RwSignal<ScreenLines>,
 
     /// Modal mode register
@@ -256,12 +248,7 @@ impl Editor {
         let doc = cx.create_rw_signal(doc);
         let style = cx.create_rw_signal(style);
 
-        let font_sizes = RefCell::new(Rc::new(EditorFontSizes {
-            id,
-            style: style.read_only(),
-            doc: doc.read_only(),
-        }));
-        let lines = Rc::new(Lines::new(cx, font_sizes));
+        let lines = Rc::new(Lines::new(cx));
         let screen_lines = cx.create_rw_signal(ScreenLines::new(cx, viewport.get_untracked()));
 
         let editor_style = cx.create_rw_signal(EditorStyle::default());
@@ -336,12 +323,7 @@ impl Editor {
             // Get rid of all the effects
             self.effects_cx.get().dispose();
 
-            *self.lines.font_sizes.borrow_mut() = Rc::new(EditorFontSizes {
-                id: self.id(),
-                style: self.style.read_only(),
-                doc: self.doc.read_only(),
-            });
-            self.lines.clear(0, None);
+            self.lines.clear(None);
             self.doc.set(doc);
             if let Some(styling) = styling {
                 self.style.set(styling);
@@ -361,12 +343,7 @@ impl Editor {
             // Get rid of all the effects
             self.effects_cx.get().dispose();
 
-            *self.lines.font_sizes.borrow_mut() = Rc::new(EditorFontSizes {
-                id: self.id(),
-                style: self.style.read_only(),
-                doc: self.doc.read_only(),
-            });
-            self.lines.clear(0, None);
+            self.lines.clear(None);
 
             self.style.set(styling);
 
@@ -450,10 +427,10 @@ impl Editor {
                 cursor,
                 offset,
             }));
-
-            self.doc().cache_rev().update(|cache_rev| {
-                *cache_rev += 1;
-            });
+            let line = self.rope_text().line_of_offset(offset);
+            self.doc()
+                .inval_lines_listener()
+                .send(InvalLines::single(line));
         });
     }
 
@@ -464,10 +441,17 @@ impl Editor {
         }
 
         batch(|| {
+            let offset = preedit
+                .preedit
+                .with_untracked(|p| p.as_ref().map(|p| p.offset));
             preedit.preedit.set(None);
-            self.doc().cache_rev().update(|cache_rev| {
-                *cache_rev += 1;
-            });
+
+            if let Some(offset) = offset {
+                let line = self.rope_text().line_of_offset(offset);
+                self.doc()
+                    .inval_lines_listener()
+                    .send(InvalLines::single(line));
+            }
         });
     }
 
@@ -475,7 +459,7 @@ impl Editor {
         self.doc().receive_char(self, c)
     }
 
-    fn compute_screen_lines(&self, base: RwSignal<ScreenLinesBase>) -> ScreenLines {
+    pub fn compute_screen_lines(&self, base: RwSignal<ScreenLinesBase>) -> ScreenLines {
         // This function *cannot* access `ScreenLines` with how it is currently implemented.
         // This is being called from within an update to screen lines.
 
@@ -727,7 +711,7 @@ impl Editor {
         backwards: bool,
         start: RVLine,
     ) -> impl Iterator<Item = VLineInfo<()>> + '_ {
-        self.lines.iter_rvlines(self.text_prov().clone(), backwards, start)
+        self.lines.iter_rvlines(self.text_prov(), backwards, start)
     }
 
     /// Iterator over *relative* [`VLineInfo`]s, starting at the buffer line, `start_line` and
@@ -811,45 +795,45 @@ impl Editor {
     /// the offset is considered to be on the next line.
     pub fn vline_of_offset(&self, offset: usize, affinity: CursorAffinity) -> VLine {
         self.lines
-            .vline_of_offset(self.text_prov(), offset, affinity)
+            .vline_of_offset(&self.text_prov(), offset, affinity)
     }
 
     pub fn vline_of_line(&self, line: usize) -> VLine {
-        self.lines.vline_of_line(self.text_prov(), line)
+        self.lines.vline_of_line(&self.text_prov(), line)
     }
 
     pub fn rvline_of_line(&self, line: usize) -> RVLine {
-        self.lines.rvline_of_line(self.text_prov(), line)
+        self.lines.rvline_of_line(&self.text_prov(), line)
     }
 
     pub fn vline_of_rvline(&self, rvline: RVLine) -> VLine {
-        self.lines.vline_of_rvline(self.text_prov(), rvline)
+        self.lines.vline_of_rvline(&self.text_prov(), rvline)
     }
 
     /// Get the nearest offset to the start of the visual line.
     pub fn offset_of_vline(&self, vline: VLine) -> usize {
-        self.lines.offset_of_vline(self.text_prov(), vline)
+        self.lines.offset_of_vline(&self.text_prov(), vline)
     }
 
     /// Get the visual line and column of the given offset.  
     /// The column is before phantom text is applied.
     pub fn vline_col_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (VLine, usize) {
         self.lines
-            .vline_col_of_offset(self.text_prov(), offset, affinity)
+            .vline_col_of_offset(&self.text_prov(), offset, affinity)
     }
 
     pub fn rvline_of_offset(&self, offset: usize, affinity: CursorAffinity) -> RVLine {
         self.lines
-            .rvline_of_offset(self.text_prov(), offset, affinity)
+            .rvline_of_offset(&self.text_prov(), offset, affinity)
     }
 
     pub fn rvline_col_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (RVLine, usize) {
         self.lines
-            .rvline_col_of_offset(self.text_prov().clone(), offset, affinity)
+            .rvline_col_of_offset(&self.text_prov(), offset, affinity)
     }
 
     pub fn offset_of_rvline(&self, rvline: RVLine) -> usize {
-        self.lines.offset_of_rvline(self.text_prov(), rvline)
+        self.lines.offset_of_rvline(&self.text_prov(), rvline)
     }
 
     pub fn vline_info(&self, vline: VLine) -> VLineInfo {
@@ -882,12 +866,12 @@ impl Editor {
 
     /// Get the first column of the overall line of the visual line
     pub fn first_col<T: std::fmt::Debug>(&self, info: VLineInfo<T>) -> usize {
-        info.first_col(self.text_prov())
+        info.first_col(&self.text_prov())
     }
 
     /// Get the last column in the overall line of the visual line
     pub fn last_col<T: std::fmt::Debug>(&self, info: VLineInfo<T>, caret: bool) -> usize {
-        info.last_col(self.text_prov(), caret)
+        info.last_col(&self.text_prov(), caret)
     }
 
     // ==== Points of locations ====
@@ -963,41 +947,6 @@ impl Editor {
         (self.offset_of_line_col(line, col), is_inside)
     }
 
-    /// Get the actual (line, col) of a particular point within the editor.
-    pub fn line_col_of_point_with_phantom(&self, point: Point) -> (usize, usize) {
-        let line_height = f64::from(self.style().line_height(self.id(), 0));
-        let info = if point.y <= 0.0 {
-            Some(self.first_rvline_info())
-        } else {
-            self.screen_lines
-                .with_untracked(|sl| {
-                    sl.iter_line_info().find(|info| {
-                        info.vline_y <= point.y && info.vline_y + line_height >= point.y
-                    })
-                })
-                .map(|info| info.vline_info)
-        };
-        let info = info.unwrap_or_else(|| {
-            for (y_idx, info) in self.iter_rvlines(false, RVLine::default()).enumerate() {
-                let vline_y = y_idx as f64 * line_height;
-                if vline_y <= point.y && vline_y + line_height >= point.y {
-                    return info;
-                }
-            }
-
-            self.last_rvline_info()
-        });
-
-        let rvline = info.rvline;
-        let line = rvline.line;
-        let text_layout = self.text_layout(line);
-
-        let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
-
-        let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
-        (line, hit_point.index)
-    }
-
     /// Get the (line, col) of a particular point within the editor.
     /// The boolean indicates whether the point is within the text bounds.
     /// Points outside of vertical bounds will return the last line.
@@ -1033,7 +982,7 @@ impl Editor {
 
         let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
 
-        let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
+        let hit_point = text_layout.text.hit_point(Point::new(point.x, y));
         // We have to unapply the phantom text shifting in order to get back to the column in
         // the actual buffer
         let col = text_layout.phantom_text.before_col(hit_point.index);
@@ -1049,7 +998,7 @@ impl Editor {
         // wrapped lines, but we want to be able to click on them
         if !hit_point.is_inside {
             // TODO(minor): this is probably wrong in some manners
-            col = info.last_col(self.text_prov(), true);
+            col = info.last_col(&self.text_prov(), true);
         }
 
         let tab_width = self.style().tab_width(self.id(), line);
@@ -1096,14 +1045,14 @@ impl Editor {
         match *horiz {
             ColPosition::Col(x) => {
                 let text_layout = self.text_layout(line);
+                // TODO: It would be better to have an alternate hit point function that takes a
+                // line index..
                 let y_pos = text_layout
-                    .text
-                    .layout_runs()
-                    .nth(line_index)
-                    .map(|run| run.line_y)
-                    .or_else(|| text_layout.text.layout_runs().last().map(|run| run.line_y))
-                    .unwrap_or(0.0);
-                let hit_point = text_layout.text.hit_point(Point::new(x, y_pos as f64));
+                    .relevant_layouts()
+                    .take(line_index)
+                    .map(|l| (l.line_ascent + l.line_descent) as f64)
+                    .sum();
+                let hit_point = text_layout.text.hit_point(Point::new(x, y_pos));
                 let n = hit_point.index;
                 let col = text_layout.phantom_text.before_col(n);
 
@@ -1141,15 +1090,12 @@ impl Editor {
     }
 
     pub fn text_layout_trigger(&self, line: usize, trigger: bool) -> Arc<TextLayoutLine> {
-        let cache_rev = self.doc().cache_rev().get_untracked();
         self.lines
-            .get_init_text_layout(cache_rev, self.config_id(), self, line, trigger)
+            .get_init_text_layout(self.config_id(), self, line, trigger)
     }
 
     fn try_get_text_layout(&self, line: usize) -> Option<Arc<TextLayoutLine>> {
-        let cache_rev = self.doc().cache_rev().get_untracked();
-        self.lines
-            .try_get_text_layout(cache_rev, self.config_id(), line)
+        self.lines.try_get_text_layout(self.config_id(), line)
     }
 
     /// Create rendable whitespace layout by creating a new text layout
@@ -1225,12 +1171,7 @@ impl TextLayoutProvider for Editor {
         Editor::text(self)
     }
 
-    fn new_text_layout(
-        &self,
-        line: usize,
-        _font_size: usize,
-        _wrap: ResolvedWrap,
-    ) -> Arc<TextLayoutLine> {
+    fn new_text_layout(&self, line: usize, _wrap: ResolvedWrap) -> Arc<TextLayoutLine> {
         // TODO: we could share text layouts between different editor views given some knowledge of
         // their wrapping
         let edid = self.id();
@@ -1302,11 +1243,11 @@ impl TextLayoutProvider for Editor {
             WrapMethod::None => {}
             WrapMethod::EditorWidth => {
                 let width = self.viewport.get_untracked().width();
-                text_layout.set_wrap(Wrap::WordOrGlyph);
+                text_layout.set_wrap(Wrap::Word);
                 text_layout.set_size(width as f32, f32::MAX);
             }
             WrapMethod::WrapWidth { width } => {
-                text_layout.set_wrap(Wrap::WordOrGlyph);
+                text_layout.set_wrap(Wrap::Word);
                 text_layout.set_size(width, f32::MAX);
             }
             // TODO:
@@ -1325,13 +1266,9 @@ impl TextLayoutProvider for Editor {
         let indent = if indent_line != line {
             // TODO: This creates the layout if it isn't already cached, but it doesn't cache the
             // result because the current method of managing the cache is not very smart.
-            let layout = self.try_get_text_layout(indent_line).unwrap_or_else(|| {
-                self.new_text_layout(
-                    indent_line,
-                    style.font_size(edid, indent_line),
-                    self.lines.wrap(),
-                )
-            });
+            let layout = self
+                .try_get_text_layout(indent_line)
+                .unwrap_or_else(|| self.new_text_layout(indent_line, self.lines.wrap()));
             layout.indent + 1.0
         } else {
             let offset = text.first_non_blank_character_on_line(indent_line);
@@ -1364,31 +1301,6 @@ impl TextLayoutProvider for Editor {
     }
 }
 
-struct EditorFontSizes {
-    id: EditorId,
-    style: ReadSignal<Rc<dyn Styling>>,
-    doc: ReadSignal<Rc<dyn Document>>,
-}
-impl LineFontSizeProvider for EditorFontSizes {
-    fn font_size(&self, line: usize) -> usize {
-        self.style
-            .with_untracked(|style| style.font_size(self.id, line))
-    }
-
-    fn cache_id(&self) -> FontSizeCacheId {
-        let mut hasher = DefaultHasher::new();
-
-        // TODO: is this actually good enough for comparing cache state?
-        // We could just have it return an arbitrary type that impl's Eq?
-        self.style
-            .with_untracked(|style| style.id().hash(&mut hasher));
-        self.doc
-            .with_untracked(|doc| doc.cache_rev().get_untracked().hash(&mut hasher));
-
-        hasher.finish()
-    }
-}
-
 /// Minimum width that we'll allow the view to be wrapped at.
 const MIN_WRAPPED_WIDTH: f32 = 100.0;
 
@@ -1400,6 +1312,7 @@ fn create_view_effects(cx: Scope, ed: &Editor) {
     let ed2 = ed.clone();
     let ed3 = ed.clone();
     let ed4 = ed.clone();
+    let ed5 = ed.clone();
 
     // Reset cursor blinking whenever the cursor changes
     {
@@ -1423,15 +1336,20 @@ fn create_view_effects(cx: Scope, ed: &Editor) {
         });
     };
 
+    let inval_lines_listener = ed.doc().inval_lines_listener();
+    inval_lines_listener.listen_with(cx, move |inval_lines| {
+        ed5.lines.invalidate(inval_lines);
+    });
+
     // Listen for layout events, currently only when a layout is created, and update screen
     // lines based on that
     ed3.lines.layout_event.listen_with(cx, move |val| {
         let ed = &ed2;
-        // TODO: Move this logic onto screen lines somehow, perhaps just an auxiliary
+        // TODO: Move this logic onto screen lines somehow, perhaps just an auxilary
         // function, to avoid getting confused about what is relevant where.
 
         match val {
-            LayoutEvent::CreatedLayout { line, .. } => {
+            LayoutEvent::CreatedLayout { line } => {
                 let sl = ed.screen_lines.get_untracked();
 
                 // Intelligently update screen lines, avoiding recalculation if possible
@@ -1513,9 +1431,6 @@ pub fn normal_compute_screen_lines(
     let min_vline = VLine((y0 / line_height as f64).floor() as usize);
     let max_vline = VLine((y1 / line_height as f64).ceil() as usize);
 
-    let cache_rev = editor.doc.get().cache_rev().get();
-    editor.lines.check_cache_rev(cache_rev);
-
     let min_info = editor.iter_vlines(false, min_vline).next();
 
     let mut rvlines = Vec::new();
@@ -1536,7 +1451,6 @@ pub fn normal_compute_screen_lines(
     let iter = lines
         .iter_rvlines_init(
             editor.text_prov(),
-            cache_rev,
             editor.config_id(),
             min_info.rvline,
             false,

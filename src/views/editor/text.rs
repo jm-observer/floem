@@ -1,15 +1,19 @@
 use std::{borrow::Cow, fmt::Debug, ops::Range, rc::Rc};
 
 use crate::{
+    text::{Attrs, AttrsList, FamilyOwned, Stretch, Weight},
     keyboard::Modifiers,
     peniko::Color,
     reactive::{RwSignal, Scope},
-    text::{Attrs, AttrsList, FamilyOwned, Stretch, Weight},
+    style,
     views::EditorCustomStyle,
 };
 use downcast_rs::{impl_downcast, Downcast};
 use floem_editor_core::{
-    buffer::rope_text::{RopeText, RopeTextVal},
+    buffer::{
+        rope_text::{RopeText, RopeTextVal},
+        InvalLines,
+    },
     command::EditCommand,
     cursor::Cursor,
     editor::EditType,
@@ -19,10 +23,10 @@ use floem_editor_core::{
     selection::Selection,
     word::WordCursor,
 };
-use floem_reactive::SignalGet;
 use lapce_xi_rope::Rope;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use floem_reactive::SignalGet;
 
 use super::{
     actions::CommonAction,
@@ -30,6 +34,7 @@ use super::{
     gutter::GutterClass,
     id::EditorId,
     layout::TextLayoutLine,
+    listener::Listener,
     normal_compute_screen_lines,
     phantom_text::{PhantomText, PhantomTextKind, PhantomTextLine},
     view::{ScreenLines, ScreenLinesBase},
@@ -48,11 +53,6 @@ impl Default for SystemClipboard {
 impl SystemClipboard {
     pub fn new() -> Self {
         Self
-    }
-
-    #[cfg(windows)]
-    pub fn get_file_list() -> Option<Vec<std::path::PathBuf>> {
-        crate::Clipboard::get_file_list().ok()
     }
 }
 
@@ -98,7 +98,9 @@ pub trait Document: DocumentPhantom + Downcast {
         RopeTextVal::new(self.text())
     }
 
-    fn cache_rev(&self) -> RwSignal<u64>;
+    // TODO(minor): visual line doesn't really need to know the old rope that `InvalLines` passes
+    // around, should we just have a separate structure that doesn't have that field?
+    fn inval_lines_listener(&self) -> Listener<InvalLines>;
 
     /// Find the next/previous offset of the match of the given character.  
     /// This is intended for use by the [Movement::NextUnmatched](floem_editor_core::movement::Movement::NextUnmatched) and
@@ -176,9 +178,15 @@ pub trait Document: DocumentPhantom + Downcast {
     fn receive_char(&self, ed: &Editor, c: &str);
 
     /// Perform a single edit.  
-    fn edit_single(&self, selection: Selection, content: &str, edit_type: EditType) {
+    fn edit_single(
+        &self,
+        ed: Option<&Editor>,
+        selection: Selection,
+        content: &str,
+        edit_type: EditType,
+    ) {
         let mut iter = std::iter::once((selection, content));
-        self.edit(&mut iter, edit_type);
+        self.edit(ed, &mut iter, edit_type);
     }
 
     /// Perform the edit(s) on this document.  
@@ -192,11 +200,16 @@ pub trait Document: DocumentPhantom + Downcast {
     ///     editor,
     ///     button(|| "Append 'Hello'").on_click_stop(move |_| {
     ///         let text = doc.text();
-    ///         doc.edit_single(Selection::caret(text.len()), "Hello", EditType::InsertChars);
+    ///         doc.edit_single(None, Selection::caret(text.len()), "Hello", EditType::InsertChars);
     ///     })
     /// ))
     /// ```
-    fn edit(&self, iter: &mut dyn Iterator<Item = (Selection, &str)>, edit_type: EditType);
+    fn edit(
+        &self,
+        ed: Option<&Editor>,
+        iter: &mut dyn Iterator<Item = (Selection, &str)>,
+        edit_type: EditType,
+    );
 }
 
 impl_downcast!(Document);
@@ -278,7 +291,6 @@ impl std::fmt::Display for RenderWhitespace {
 ///   - Default font size, font family, etc.
 /// - `AttrsList`: This lets you set spans of text to have different styling
 ///   - Syntax highlighting, bolding specific words, etc.
-///
 /// Then once the text layout for the line is created from that, we have:
 /// - `Layout Styles`: Where it may depend on the position of text in the line (after wrapping)
 ///   - Outline boxes
@@ -381,7 +393,7 @@ pub fn default_light_theme(mut style: EditorCustomStyle) -> EditorCustomStyle {
     style.0 = style
         .0
         .color(fg)
-        .background(bg)
+        .set(style::Background, bg)
         .class(GutterClass, |s| s.background(bg));
 
     style
@@ -459,8 +471,8 @@ where
         self.doc.rope_text()
     }
 
-    fn cache_rev(&self) -> RwSignal<u64> {
-        self.doc.cache_rev()
+    fn inval_lines_listener(&self) -> Listener<InvalLines> {
+        self.doc.inval_lines_listener()
     }
 
     fn find_unmatched(&self, offset: usize, previous: bool, ch: char) -> usize {
@@ -505,12 +517,23 @@ where
         self.doc.receive_char(ed, c)
     }
 
-    fn edit_single(&self, selection: Selection, content: &str, edit_type: EditType) {
-        self.doc.edit_single(selection, content, edit_type)
+    fn edit_single(
+        &self,
+        ed: Option<&Editor>,
+        selection: Selection,
+        content: &str,
+        edit_type: EditType,
+    ) {
+        self.doc.edit_single(ed, selection, content, edit_type)
     }
 
-    fn edit(&self, iter: &mut dyn Iterator<Item = (Selection, &str)>, edit_type: EditType) {
-        self.doc.edit(iter, edit_type)
+    fn edit(
+        &self,
+        ed: Option<&Editor>,
+        iter: &mut dyn Iterator<Item = (Selection, &str)>,
+        edit_type: EditType,
+    ) {
+        self.doc.edit(ed, iter, edit_type)
     }
 }
 impl<D, F> DocumentPhantom for ExtCmdDocument<D, F>
