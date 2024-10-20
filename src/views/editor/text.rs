@@ -5,7 +5,6 @@ use crate::{
     keyboard::Modifiers,
     peniko::Color,
     reactive::{RwSignal, Scope},
-    style,
     views::EditorCustomStyle,
 };
 use downcast_rs::{impl_downcast, Downcast};
@@ -291,7 +290,7 @@ impl std::fmt::Display for RenderWhitespace {
 ///   - Default font size, font family, etc.
 /// - `AttrsList`: This lets you set spans of text to have different styling
 ///   - Syntax highlighting, bolding specific words, etc.
-/// Then once the text layout for the line is created from that, we have:
+///     Then once the text layout for the line is created from that, we have:
 /// - `Layout Styles`: Where it may depend on the position of text in the line (after wrapping)
 ///   - Outline boxes
 ///
@@ -392,8 +391,7 @@ pub fn default_light_theme(mut style: EditorCustomStyle) -> EditorCustomStyle {
 
     style.0 = style
         .0
-        .color(fg)
-        .set(style::Background, bg)
+        .color(fg).background(bg)
         .class(GutterClass, |s| s.background(bg));
 
     style

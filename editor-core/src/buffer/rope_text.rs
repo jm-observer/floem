@@ -122,7 +122,7 @@ pub trait RopeText {
 
         if fst == Some('\r') && snd == Some('\n') {
             offset -= 2;
-        } else if (fst == Some('\n') && snd == None) || snd == Some('\n') {
+        } else if (fst == Some('\n') && snd.is_none()) || snd == Some('\n') {
             offset -= 1;
         }
 
@@ -185,13 +185,8 @@ pub trait RopeText {
         let fst = chars.next();
         let snd = chars.next();
 
-        if fst == Some('\r') && snd == Some('\n') {
-            true
-        } else if (fst == Some('\n') && snd == None) || snd == Some('\n') {
-            true
-        } else {
-            false
-        }
+        (fst == Some('\r') && snd == Some('\n')) ||
+        ((fst == Some('\n') && snd.is_none()) || snd == Some('\n'))
     }
 
     /// Returns the content of the given line.

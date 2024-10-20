@@ -47,12 +47,12 @@ impl<T> LineRenderCache<T> {
 
     pub fn get(&self, line: usize) -> Option<&T> {
         let idx = self.idx(line)?;
-        self.entries.get(idx).map(|x| x.as_ref()).flatten()
+        self.entries.get(idx).and_then(|x| x.as_ref())
     }
 
     pub fn get_mut(&mut self, line: usize) -> Option<&mut T> {
         let idx = self.idx(line)?;
-        self.entries.get_mut(idx).map(|x| x.as_mut()).flatten()
+        self.entries.get_mut(idx).and_then(|x| x.as_mut())
     }
 
     pub fn insert(&mut self, line: usize, entry: T) {

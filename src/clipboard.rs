@@ -50,6 +50,7 @@ impl Clipboard {
     }
 
     #[cfg(windows)]
+    #[allow(dead_code)]
     pub(crate) fn get_file_list() -> Result<Vec<std::path::PathBuf>, ClipboardError> {
         clipboard_win::Clipboard::new_attempts(10)
             .and_then(|x| x.get_file_list())

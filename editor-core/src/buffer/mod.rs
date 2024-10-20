@@ -102,12 +102,12 @@ pub struct InvalLinesR {
     pub new_count: usize,
     pub old_text: Rope,
 }
-impl Into<InvalLines> for InvalLinesR {
-    fn into(self) -> InvalLines {
+impl From<InvalLinesR> for InvalLines {
+    fn from(val: InvalLinesR) -> InvalLines {
         InvalLines {
-            start_line: self.start_line,
-            inval_count: self.inval_count,
-            new_count: self.new_count,
+            start_line: val.start_line,
+            inval_count: val.inval_count,
+            new_count: val.new_count,
         }
     }
 }

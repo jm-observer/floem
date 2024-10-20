@@ -26,6 +26,7 @@ use floem_editor_core::{
 };
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith, Trigger};
 use lapce_xi_rope::Rope;
+use peniko::Brush;
 
 pub mod actions;
 pub mod color;
@@ -126,7 +127,7 @@ impl EditorStyle {
     }
 }
 impl EditorStyle {
-    pub fn ed_caret(&self) -> Color {
+    pub fn ed_caret(&self) -> Brush {
         self.caret()
     }
 }
@@ -688,7 +689,7 @@ impl Editor {
         backwards: bool,
         start: VLine,
     ) -> impl Iterator<Item = VLineInfo> + '_ {
-        self.lines.iter_vlines(self.text_prov(), backwards, start)
+        self.lines.iter_vlines(self.text_prov().clone(), backwards, start)
     }
 
     /// Iterate over the visual lines in the view, starting at the given line and ending at the
@@ -776,6 +777,42 @@ impl Editor {
         self.rope_text().line_of_offset(offset)
     }
 
+
+    /// Get the actual (line, col) of a particular point within the editor.
+    pub fn line_col_of_point_with_phantom(&self, point: Point) -> (usize, usize) {
+        let line_height = f64::from(self.style().line_height(self.id(), 0));
+        let info = if point.y <= 0.0 {
+            Some(self.first_rvline_info())
+        } else {
+            self.screen_lines
+                .with_untracked(|sl| {
+                    sl.iter_line_info().find(|info| {
+                        info.vline_y <= point.y && info.vline_y + line_height >= point.y
+                    })
+                })
+                .map(|info| info.vline_info)
+        };
+        let info = info.unwrap_or_else(|| {
+            for (y_idx, info) in self.iter_rvlines(false, RVLine::default()).enumerate() {
+                let vline_y = y_idx as f64 * line_height;
+                if vline_y <= point.y && vline_y + line_height >= point.y {
+                    return info;
+                }
+            }
+
+            self.last_rvline_info()
+        });
+
+        let rvline = info.rvline;
+        let line = rvline.line;
+        let text_layout = self.text_layout(line);
+
+        let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
+
+        let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
+        (line, hit_point.index)
+    }
+
     /// Returns the offset into the buffer of the first non blank character on the given line.
     pub fn first_non_blank_character_on_line(&self, line: usize) -> usize {
         self.rope_text().first_non_blank_character_on_line(line)
@@ -795,45 +832,45 @@ impl Editor {
     /// the offset is considered to be on the next line.
     pub fn vline_of_offset(&self, offset: usize, affinity: CursorAffinity) -> VLine {
         self.lines
-            .vline_of_offset(&self.text_prov(), offset, affinity)
+            .vline_of_offset(self.text_prov(), offset, affinity)
     }
 
     pub fn vline_of_line(&self, line: usize) -> VLine {
-        self.lines.vline_of_line(&self.text_prov(), line)
+        self.lines.vline_of_line(self.text_prov(), line)
     }
 
     pub fn rvline_of_line(&self, line: usize) -> RVLine {
-        self.lines.rvline_of_line(&self.text_prov(), line)
+        self.lines.rvline_of_line(self.text_prov(), line)
     }
 
     pub fn vline_of_rvline(&self, rvline: RVLine) -> VLine {
-        self.lines.vline_of_rvline(&self.text_prov(), rvline)
+        self.lines.vline_of_rvline(self.text_prov(), rvline)
     }
 
     /// Get the nearest offset to the start of the visual line.
     pub fn offset_of_vline(&self, vline: VLine) -> usize {
-        self.lines.offset_of_vline(&self.text_prov(), vline)
+        self.lines.offset_of_vline(self.text_prov(), vline)
     }
 
     /// Get the visual line and column of the given offset.  
     /// The column is before phantom text is applied.
     pub fn vline_col_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (VLine, usize) {
         self.lines
-            .vline_col_of_offset(&self.text_prov(), offset, affinity)
+            .vline_col_of_offset(self.text_prov(), offset, affinity)
     }
 
     pub fn rvline_of_offset(&self, offset: usize, affinity: CursorAffinity) -> RVLine {
         self.lines
-            .rvline_of_offset(&self.text_prov(), offset, affinity)
+            .rvline_of_offset(self.text_prov(), offset, affinity)
     }
 
     pub fn rvline_col_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (RVLine, usize) {
         self.lines
-            .rvline_col_of_offset(&self.text_prov(), offset, affinity)
+            .rvline_col_of_offset(self.text_prov(), offset, affinity)
     }
 
     pub fn offset_of_rvline(&self, rvline: RVLine) -> usize {
-        self.lines.offset_of_rvline(&self.text_prov(), rvline)
+        self.lines.offset_of_rvline(self.text_prov(), rvline)
     }
 
     pub fn vline_info(&self, vline: VLine) -> VLineInfo {
@@ -866,12 +903,12 @@ impl Editor {
 
     /// Get the first column of the overall line of the visual line
     pub fn first_col<T: std::fmt::Debug>(&self, info: VLineInfo<T>) -> usize {
-        info.first_col(&self.text_prov())
+        info.first_col(self.text_prov())
     }
 
     /// Get the last column in the overall line of the visual line
     pub fn last_col<T: std::fmt::Debug>(&self, info: VLineInfo<T>, caret: bool) -> usize {
-        info.last_col(&self.text_prov(), caret)
+        info.last_col(self.text_prov(), caret)
     }
 
     // ==== Points of locations ====
@@ -982,7 +1019,7 @@ impl Editor {
 
         let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
 
-        let hit_point = text_layout.text.hit_point(Point::new(point.x, y));
+        let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
         // We have to unapply the phantom text shifting in order to get back to the column in
         // the actual buffer
         let col = text_layout.phantom_text.before_col(hit_point.index);
@@ -998,7 +1035,7 @@ impl Editor {
         // wrapped lines, but we want to be able to click on them
         if !hit_point.is_inside {
             // TODO(minor): this is probably wrong in some manners
-            col = info.last_col(&self.text_prov(), true);
+            col = info.last_col(self.text_prov(), true);
         }
 
         let tab_width = self.style().tab_width(self.id(), line);
@@ -1050,7 +1087,7 @@ impl Editor {
                 let y_pos = text_layout
                     .relevant_layouts()
                     .take(line_index)
-                    .map(|l| (l.line_ascent + l.line_descent) as f64)
+                    .map(|l| (l.max_ascent + l.max_descent) as f64)
                     .sum();
                 let hit_point = text_layout.text.hit_point(Point::new(x, y_pos));
                 let n = hit_point.index;
