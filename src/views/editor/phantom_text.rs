@@ -4,7 +4,10 @@ use crate::{
     peniko::Color,
     text::{Attrs, AttrsList},
 };
+use crossbeam::epoch::Pointable;
+use downcast_rs::Downcast;
 use floem_editor_core::cursor::CursorAffinity;
+use lapce_xi_rope::{tree::Leaf, Interval};
 use smallvec::SmallVec;
 
 /// `PhantomText` is for text that is not in the actual document, but should be rendered with it.
@@ -38,6 +41,11 @@ pub enum PhantomTextKind {
     InlayHint,
     /// Error lens
     Diagnostic,
+    FoldedRang {
+        same_line: bool,
+        end_line: u32,
+        end_character: u32,
+    },
 }
 
 /// Information about the phantom text on a specific line.
@@ -158,10 +166,33 @@ impl PhantomTextLine {
             }
 
             let mut text_o = text.into_owned();
-            text_o.insert_str(location, &phantom.text);
-            text = Cow::Owned(text_o);
+            println!("{:?} {}", phantom.kind, phantom.text);
+            if let PhantomTextKind::FoldedRang {
+                same_line,
+                end_character,
+                ..
+            } = phantom.kind
+            {
+                if same_line {
+                    let mut new_text_o = text_o.subseq(Interval::new(0, location));
+                    new_text_o.push_str(&phantom.text);
+                    new_text_o.push_str(
+                        &text_o.subseq(Interval::new(end_character as usize, text_o.len())),
+                    );
+                    col_shift =
+                        col_shift + phantom.text.len() - (end_character as usize - location);
+                } else {
+                    text_o = text_o.subseq(Interval::new(0, location));
+                    text_o.push_str(&phantom.text);
+                    text = Cow::Owned(text_o);
+                    return text;
+                }
+            } else {
+                text_o.insert_str(location, &phantom.text);
+                col_shift += phantom.text.len();
+            }
 
-            col_shift += phantom.text.len();
+            text = Cow::Owned(text_o);
         }
 
         text
