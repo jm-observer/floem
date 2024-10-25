@@ -348,9 +348,9 @@ impl Action {
                 let indent = if auto_indent && has_unmatched_pair(&first_half) {
                     indent_storage = format!("{}{}", line_indent, buffer.indent_unit());
                     &indent_storage
-                } else if keep_indent && second_half_trim.is_empty() {
-                    &line_indent
-                } else if keep_indent && !second_half.starts_with(&line_indent) {
+                } else if keep_indent
+                    && (second_half_trim.is_empty() || !second_half.starts_with(&line_indent))
+                {
                     &line_indent
                 } else {
                     indent_storage = String::new();
