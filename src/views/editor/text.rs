@@ -336,14 +336,14 @@ pub trait Styling {
     // TODO: get other style information based on EditorColor enum?
     // TODO: line_style equivalent?
 
-    /// Apply custom attribute styles to the line  
+    /// Apply custom attribute styles to the line
+    ///
+    /// 原始文本的样式，如语法前景色
     fn apply_attr_styles(
         &self,
-        _edid: EditorId,
-        _style: &EditorStyle,
         _line: usize,
         _default: Attrs,
-        _attrs: &mut AttrsList,
+        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine,
     ) {
     }
 
@@ -699,11 +699,9 @@ impl Styling for SimpleStyling {
 
     fn apply_attr_styles(
         &self,
-        _edid: EditorId,
-        _style: &EditorStyle,
         _line: usize,
         _default: Attrs,
-        _attrs: &mut AttrsList,
+        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine
     ) {
     }
 

@@ -266,7 +266,10 @@ impl DocumentPhantom for TextDocument {
             text.push(preedit);
         }
 
-        PhantomTextLine { text }
+        PhantomTextLine {
+            text,
+            visual_line: line + 1,
+        }
     }
 
     fn has_multiline_phantom(&self, edid: EditorId, _styling: &EditorStyle) -> bool {

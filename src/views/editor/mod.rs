@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use std::borrow::Cow;
 
 use crate::{
     action::{exec_after, TimerToken},
@@ -727,7 +728,8 @@ impl Editor {
         backwards: bool,
         start: RVLine,
     ) -> impl Iterator<Item = VLineInfo<()>> + '_ {
-        self.lines.iter_rvlines(self.text_prov().clone(), backwards, start)
+        self.lines
+            .iter_rvlines(self.text_prov().clone(), backwards, start)
     }
 
     /// Iterator over *relative* [`VLineInfo`]s, starting at the buffer line, `start_line` and
@@ -1219,6 +1221,43 @@ impl Editor {
         Some(rendered_whitespaces)
     }
 }
+
+fn strip_suffix(line_content_original: &str) -> String {
+    if let Some(s) = line_content_original.strip_suffix("\r\n") {
+        format!("{s}  ")
+    } else if let Some(s) = line_content_original.strip_suffix('\n') {
+        format!("{s} ",)
+    } else {
+        line_content_original.to_string()
+    }
+}
+
+
+fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a String, style: Rc<dyn Styling>, edid: EditorId
+                                    , es: &'a EditorStyle, doc: Rc<dyn Document>) -> (PhantomTextLine, Cow<'a , str>, AttrsList, Option<(u32, u32)>){
+    let font_size = style.font_size(edid, line);
+    // Combine the phantom text with the line content
+    let phantom_text = doc.phantom_text(edid, &es, line);
+    // todo
+    let collapsed = phantom_text.combine_with_text(&line_content);
+
+    let family = style.font_family(edid, line);
+    let attrs = Attrs::new()
+        .color(es.ed_text_color())
+        .family(&family)
+        .font_size(font_size as f32)
+        .line_height(LineHeightValue::Px(style.line_height(edid, line)));
+    let mut attrs_list = AttrsList::new(attrs);
+
+    style.apply_attr_styles(line, attrs, &mut attrs_list, &phantom_text);
+    let phantom_color = es.phantom_color();
+    // Apply phantom text specific styling
+    phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
+
+    (phantom_text, collapsed.0, attrs_list, collapsed.1)
+}
+
+
 impl TextLayoutProvider for Editor {
     // TODO: should this just return a `Rope`?
     fn text(&self) -> Rope {
@@ -1237,68 +1276,23 @@ impl TextLayoutProvider for Editor {
         let text = self.rope_text();
         let style = self.style();
         let doc = self.doc();
+        let es = self.es.get_untracked();
 
         let line_content_original = text.line_content(line);
-
-        let font_size = style.font_size(edid, line);
-
         // Get the line content with newline characters replaced with spaces
         // and the content without the newline characters
         // TODO: cache or add some way that text layout is created to auto insert the spaces instead
         // though we immediately combine with phantom text so that's a thing.
-        let line_content = if let Some(s) = line_content_original.strip_suffix("\r\n") {
-            format!("{s}  ")
-        } else if let Some(s) = line_content_original.strip_suffix('\n') {
-            format!("{s} ",)
-        } else {
-            line_content_original.to_string()
-        };
-        // Combine the phantom text with the line content
-        let phantom_text = doc.phantom_text(edid, &self.es.get_untracked(), line);
-        let line_content = phantom_text.combine_with_text(&line_content);
+        let line_content = strip_suffix(&line_content_original);
 
-        let family = style.font_family(edid, line);
-        let attrs = Attrs::new()
-            .color(self.es.with(|s| s.ed_text_color()))
-            .family(&family)
-            .font_size(font_size as f32)
-            .line_height(LineHeightValue::Px(style.line_height(edid, line)));
-        let mut attrs_list = AttrsList::new(attrs);
-
-        self.es.with_untracked(|es| {
-            style.apply_attr_styles(edid, es, line, attrs, &mut attrs_list);
-        });
-
-        // Apply phantom text specific styling
-        for (offset, size, col, phantom) in phantom_text.offset_size_iter() {
-            let start = col + offset;
-            let end = start + size;
-
-            let mut attrs = attrs;
-            if let Some(fg) = phantom.fg {
-                attrs = attrs.color(fg);
-            } else {
-                attrs = attrs.color(self.es.with(|es| es.phantom_color()))
-            }
-            if let Some(phantom_font_size) = phantom.font_size {
-                attrs = attrs.font_size(phantom_font_size.min(font_size) as f32);
-            }
-            attrs_list.add_span(start..end, attrs);
-            // if let Some(font_family) = phantom.font_family.clone() {
-            //     layout_builder = layout_builder.range_attribute(
-            //         start..end,
-            //         TextAttribute::FontFamily(font_family),
-            //     );
-            // }
-        }
-
+        let (phantom_text, line_content, attrs_list, collapsed_line_col) = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone());
         let mut text_layout = TextLayout::new();
         // TODO: we could move tab width setting to be done by the document
         text_layout.set_tab_width(style.tab_width(edid, line));
         text_layout.set_text(&line_content, attrs_list);
 
         // dbg!(self.editor_style.with(|s| s.wrap_method()));
-        match self.es.with(|s| s.wrap_method()) {
+        match es.wrap_method() {
             WrapMethod::None => {}
             WrapMethod::EditorWidth => {
                 let width = self.viewport.get_untracked().width();
@@ -1317,7 +1311,7 @@ impl TextLayoutProvider for Editor {
             &line_content_original,
             &text_layout,
             &phantom_text,
-            self.es.with(|s| s.render_whitespace()),
+            es.render_whitespace(),
         );
 
         let indent_line = style.indent_line(edid, line, &line_content_original);
@@ -1346,10 +1340,7 @@ impl TextLayoutProvider for Editor {
             indent,
             phantom_text,
         };
-        self.es.with_untracked(|es| {
-            style.apply_layout_styles(edid, es, line, &mut layout_line);
-        });
-
+        style.apply_layout_styles(edid, &es, line, &mut layout_line);
         Arc::new(layout_line)
     }
 
