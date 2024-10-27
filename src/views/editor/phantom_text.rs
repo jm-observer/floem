@@ -64,7 +64,7 @@ impl PhantomTextLine {
         attrs_list: &mut AttrsList,
         attrs: Attrs,
         font_size: usize,
-        phantom_color: Color,
+        phantom_color: Color, collapsed_line_col: usize
     ) {
         // Apply phantom text specific styling
         for (offset, size, col, phantom) in self.offset_size_iter() {
@@ -98,7 +98,7 @@ impl PhantomTextLine {
             if let Some(phantom_font_size) = phantom.font_size {
                 attrs = attrs.font_size(phantom_font_size.min(font_size) as f32);
             }
-            attrs_list.add_span(start..end, attrs);
+            attrs_list.add_span((start + collapsed_line_col)..(end + collapsed_line_col), attrs);
         }
     }
 
@@ -352,7 +352,7 @@ impl PhantomTextLine {
                     )
                 }
             };
-            tracing::info!(
+            tracing::debug!(
                 "visual_line={} offset={} len={} col={} text={} {:?}",
                 self.visual_line,
                 rs.0,

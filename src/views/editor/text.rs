@@ -23,6 +23,8 @@ use floem_reactive::SignalGet;
 use lapce_xi_rope::Rope;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use floem_renderer::text::TextLayout;
+use crate::views::editor::layout::LineExtraStyle;
 
 use super::{
     actions::CommonAction,
@@ -343,18 +345,16 @@ pub trait Styling {
         &self,
         _line: usize,
         _default: Attrs,
-        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine,
+        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine, _collapsed_line_col: usize
     ) {
     }
 
     fn apply_layout_styles(
         &self,
-        _edid: EditorId,
-        _style: &EditorStyle,
-        _line: usize,
-        _layout_line: &mut TextLayoutLine,
-    ) {
-    }
+        _layout: &TextLayout,
+        _phantom_text: &PhantomTextLine,
+        _collapsed_line_col: usize,
+    ) -> Vec<LineExtraStyle>;
 
     /// Whether it should draw the cursor caret on the given line.
     /// Note that these are extra conditions on top of the typical hide cursor &
@@ -701,17 +701,15 @@ impl Styling for SimpleStyling {
         &self,
         _line: usize,
         _default: Attrs,
-        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine
+        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine, _collapsed_line_col: usize
     ) {
     }
 
     fn apply_layout_styles(
-        &self,
-        _edid: EditorId,
-        _style: &EditorStyle,
-        _line: usize,
-        _layout_line: &mut TextLayoutLine,
-    ) {
+        &self, _layout: &TextLayout, _phantom_text: &PhantomTextLine,
+        _collapsed_line_col: usize,
+    )-> Vec<LineExtraStyle> {
+    Vec::new()
     }
 }
 

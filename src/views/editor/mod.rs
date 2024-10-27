@@ -1234,7 +1234,8 @@ fn strip_suffix(line_content_original: &str) -> String {
 
 
 fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a String, style: Rc<dyn Styling>, edid: EditorId
-                                    , es: &'a EditorStyle, doc: Rc<dyn Document>) -> (PhantomTextLine, Cow<'a , str>, AttrsList, Option<(u32, u32)>){
+                                    , es: &'a EditorStyle, doc: Rc<dyn Document>, collapsed_line_col: usize) -> (PhantomTextLine, Cow<'a , str>, AttrsList, Option<(u32, u32)>
+){
     let font_size = style.font_size(edid, line);
     // Combine the phantom text with the line content
     let phantom_text = doc.phantom_text(edid, &es, line);
@@ -1249,10 +1250,10 @@ fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a String, style
         .line_height(LineHeightValue::Px(style.line_height(edid, line)));
     let mut attrs_list = AttrsList::new(attrs);
 
-    style.apply_attr_styles(line, attrs, &mut attrs_list, &phantom_text);
+    style.apply_attr_styles(line, attrs, &mut attrs_list, &phantom_text, collapsed_line_col);
     let phantom_color = es.phantom_color();
     // Apply phantom text specific styling
-    phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
+    phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color, collapsed_line_col);
 
     (phantom_text, collapsed.0, attrs_list, collapsed.1)
 }
@@ -1285,7 +1286,24 @@ impl TextLayoutProvider for Editor {
         // though we immediately combine with phantom text so that's a thing.
         let line_content = strip_suffix(&line_content_original);
 
-        let (phantom_text, line_content, attrs_list, collapsed_line_col) = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone());
+        let (phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
+            = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0);
+
+        let mut line_content = line_content.to_string();
+        while let Some((collapsed_line, ..)) = collapsed_line_col.take() {
+            let line = collapsed_line as usize;
+            let line_content_original = text.line_content(line);
+            let next_line_content = strip_suffix(&line_content_original);
+            let (_phantom_text, collapsed_line_content, collapsed_attrs_list, next_collapsed_line_col)
+                = calcuate_line_text_and_style(collapsed_line as usize, &next_line_content, style.clone(), edid, &es, doc.clone(), line_content.len());
+            collapsed_line_col = next_collapsed_line_col;
+
+            line_content.push_str(&collapsed_line_content);
+            for (rangs, attrs) in collapsed_attrs_list.spans() {
+                attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
+            }
+        }
+
         let mut text_layout = TextLayout::new();
         // TODO: we could move tab width setting to be done by the document
         text_layout.set_tab_width(style.tab_width(edid, line));
@@ -1307,13 +1325,13 @@ impl TextLayoutProvider for Editor {
             WrapMethod::WrapColumn { .. } => {}
         }
 
-        let whitespaces = Self::new_whitespace_layout(
-            &line_content_original,
-            &text_layout,
-            &phantom_text,
-            es.render_whitespace(),
-        );
-
+        // let whitespaces = Self::new_whitespace_layout(
+        //     &line_content_original,
+        //     &text_layout,
+        //     &phantom_text,
+        //     es.render_whitespace(),
+        // );
+        // tracing::info!("line={line} {:?}", whitespaces);
         let indent_line = style.indent_line(edid, line, &line_content_original);
 
         let indent = if indent_line != line {
@@ -1336,11 +1354,16 @@ impl TextLayoutProvider for Editor {
         let mut layout_line = TextLayoutLine {
             text: text_layout,
             extra_style: Vec::new(),
-            whitespaces,
+            whitespaces: None,
             indent,
             phantom_text,
         };
-        style.apply_layout_styles(edid, &es, line, &mut layout_line);
+        let extra_style = style.apply_layout_styles(&layout_line.text, &layout_line.phantom_text, 0);
+
+        layout_line.extra_style.clear();
+        layout_line.extra_style.extend(extra_style);
+
+
         Arc::new(layout_line)
     }
 

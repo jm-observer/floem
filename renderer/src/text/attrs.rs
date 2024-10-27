@@ -183,7 +183,7 @@ impl<'a> Attrs<'a> {
 }
 
 #[derive(PartialEq, Clone)]
-pub struct AttrsList(pub(crate) cosmic_text::AttrsList);
+pub struct AttrsList(pub cosmic_text::AttrsList);
 
 impl AttrsList {
     /// Create a new attributes list with a set of default [Attrs]
@@ -211,6 +211,10 @@ impl AttrsList {
     /// This returns a span that contains the index
     pub fn get_span(&self, index: usize) -> Attrs {
         self.0.get_span(index).into()
+    }
+
+    pub fn spans(&self) -> Vec<(&Range<usize>, &cosmic_text::AttrsOwned)> {
+        self.0.spans()
     }
 
     /// Split attributes list at an offset
