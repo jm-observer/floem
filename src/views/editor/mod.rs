@@ -1043,6 +1043,7 @@ impl Editor {
         // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
         // right end will just go to the end of the line.
         let max_col = self.line_end_col(line, mode != Mode::Normal);
+
         let mut col = col.min(max_col);
 
         // TODO: we need to handle affinity. Clicking at end of a wrapped line should give it a
@@ -1380,6 +1381,7 @@ impl TextLayoutProvider for Editor {
         Arc::new(layout_line)
     }
 
+    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
     fn before_phantom_col(&self, line: usize, col: usize) -> usize {
         self.doc()
             .before_phantom_col(self.id(), &self.es.get_untracked(), line, col)

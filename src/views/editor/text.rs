@@ -208,6 +208,8 @@ pub trait DocumentPhantom {
 
     /// Translate a column position into the position it would be before combining with
     /// the phantom text.
+    ///
+    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
     fn before_phantom_col(
         &self,
         edid: EditorId,

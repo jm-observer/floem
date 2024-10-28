@@ -64,7 +64,8 @@ impl PhantomTextLine {
         attrs_list: &mut AttrsList,
         attrs: Attrs,
         font_size: usize,
-        phantom_color: Color, collapsed_line_col: usize
+        phantom_color: Color,
+        collapsed_line_col: usize,
     ) {
         // Apply phantom text specific styling
         for (offset, size, col, phantom) in self.offset_size_iter() {
@@ -98,7 +99,10 @@ impl PhantomTextLine {
             if let Some(phantom_font_size) = phantom.font_size {
                 attrs = attrs.font_size(phantom_font_size.min(font_size) as f32);
             }
-            attrs_list.add_span((start + collapsed_line_col)..(end + collapsed_line_col), attrs);
+            attrs_list.add_span(
+                (start + collapsed_line_col)..(end + collapsed_line_col),
+                attrs,
+            );
         }
     }
 
@@ -134,19 +138,21 @@ impl PhantomTextLine {
 
     /// Translate a column position into the text into what it would be after combining
     ///
+    /// 将列位置转换为合并后的文本位置
+    ///
     /// If `before_cursor` is false and the cursor is right at the start then it will stay there
     /// (Think 'is the phantom text before the cursor')
     pub fn col_after(&self, pre_col: usize, before_cursor: bool) -> usize {
         let mut last = pre_col;
         for (col_shift, size, col, text) in self.offset_size_iter() {
             if col_shift < 0 {
-                // tracing::warn!("offset < 0 {:?}", text);
-                continue;
+                tracing::warn!("offset < 0 {:?}", text);
+                // continue;
             }
             if size < 0 {
                 // tracing::debug!("size < 0 {:?}", text.kind);
                 assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                continue;
+                // continue;
             }
 
             let before_cursor = match text.affinity {
@@ -171,13 +177,13 @@ impl PhantomTextLine {
         let mut last = pre_col;
         for (col_shift, size, col, text) in self.offset_size_iter() {
             if col_shift < 0 {
-                // tracing::warn!("offset < 0 {:?}", text);
-                continue;
+                tracing::warn!("offset < 0 {:?}", text);
+                // continue;
             }
             if size < 0 {
                 tracing::debug!("size < 0 {:?}", text.kind);
                 assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                continue;
+                // continue;
             }
             if pre_col > col || (pre_col == col && before_cursor) {
                 last = pre_col + col_shift as usize + size as usize;
@@ -225,11 +231,14 @@ impl PhantomTextLine {
     }
 
     /// Translate a column position into the position it would be before combining
+    ///
+    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
     pub fn before_col(&self, col: usize) -> usize {
         let mut last = col;
+        // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
         for (col_shift, size, hint_col, phantom) in self.offset_size_iter() {
             if col_shift < 0 {
-                // tracing::warn!("offset < 0 {:?}", phantom);
+                tracing::warn!("offset < 0 {:?}", phantom);
                 continue;
             }
             if size < 0 {
@@ -239,12 +248,17 @@ impl PhantomTextLine {
             }
             let shifted_start = hint_col + col_shift as usize;
             let shifted_end = shifted_start + size as usize;
+            tracing::warn!("col={col} visual_line={:?} hint_col={hint_col} col_shift={col_shift} shifted_start={shifted_start} shifted_end={shifted_end}"
+                , self.visual_line);
             if col >= shifted_start {
                 if col >= shifted_end {
                     last = col - col_shift as usize - size as usize;
                 } else {
-                    last = hint_col;
+                    return hint_col;
+                    // last = hint_col;
                 }
+            } else {
+                return last;
             }
         }
         last

@@ -17,6 +17,7 @@ pub struct LineExtraStyle {
     pub wave_line: Option<Color>,
 }
 
+/// 以原始文本行为单位，的相关
 #[derive(Clone)]
 pub struct TextLayoutLine {
     /// Extra styling that should be applied to the text
@@ -92,12 +93,13 @@ impl TextLayoutLine {
                 // may be a space, but it isn't included in the layout! Though this only happens
                 // for single spaces, for some reason.
                 let pre_end = text_prov.before_phantom_col(line_v, end);
-                let line_offset = text.offset_of_line(line);
+
 
                 // TODO(minor): We don't really need the entire line, just the two characters after
                 let line_end = text.line_end_col(line, true);
 
                 let end = if pre_end <= line_end {
+                    let line_offset = text.offset_of_line(line);
                     let after = text.slice_to_cow(line_offset + pre_end..line_offset + line_end);
                     if after.starts_with(' ') && !after.starts_with("  ") {
                         end + 1

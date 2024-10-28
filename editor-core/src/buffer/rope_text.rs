@@ -99,6 +99,9 @@ pub trait RopeText {
         offset
     }
 
+    /// 行末字符在该行的索引。
+    ///
+    /// 亦可以用来计算该行的长度。
     fn line_end_col(&self, line: usize, caret: bool) -> usize {
         let line_start = self.offset_of_line(line);
         let offset = self.line_end_offset(line, caret);
