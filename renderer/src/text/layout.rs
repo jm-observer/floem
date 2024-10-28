@@ -172,6 +172,7 @@ impl<'b> Iterator for LayoutRunIter<'b> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct HitPosition {
     /// Text line the cursor is on
     pub line: usize,

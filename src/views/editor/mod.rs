@@ -53,6 +53,7 @@ pub mod visual_line;
 
 pub use floem_editor_core as core;
 use peniko::Brush;
+use crate::views::editor::phantom_text::PhantomTextKind;
 
 use self::{
     command::Command,
@@ -1286,7 +1287,7 @@ impl TextLayoutProvider for Editor {
         // though we immediately combine with phantom text so that's a thing.
         let line_content = strip_suffix(&line_content_original);
 
-        let (phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
+        let (mut phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
             = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0);
 
         let mut line_content = line_content.to_string();
@@ -1294,13 +1295,25 @@ impl TextLayoutProvider for Editor {
             let line = collapsed_line as usize;
             let line_content_original = text.line_content(line);
             let next_line_content = strip_suffix(&line_content_original);
-            let (_phantom_text, collapsed_line_content, collapsed_attrs_list, next_collapsed_line_col)
-                = calcuate_line_text_and_style(collapsed_line as usize, &next_line_content, style.clone(), edid, &es, doc.clone(), line_content.len());
+            let offset_col = line_content.len();
+            let (next_phantom_text, collapsed_line_content, collapsed_attrs_list, next_collapsed_line_col)
+                = calcuate_line_text_and_style(collapsed_line as usize, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col);
             collapsed_line_col = next_collapsed_line_col;
 
             line_content.push_str(&collapsed_line_content);
             for (rangs, attrs) in collapsed_attrs_list.spans() {
                 attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
+            }
+            let mut offset_col = offset_col;
+            for mut phantom in next_phantom_text.text {
+                if let PhantomTextKind::CrossLineFoldedRangEnd = phantom.kind {
+                    offset_col -= phantom.col;
+                    // ?
+                    continue;
+                }
+                tracing::info!("{offset_col} {phantom:?}");
+                phantom.col += offset_col;
+                phantom_text.text.push(phantom);
             }
         }
 
