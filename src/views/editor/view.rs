@@ -741,8 +741,7 @@ impl EditorView {
             .font_size(style.font_size(edid, 0) as f32);
         let attrs_list = AttrsList::new(attrs);
 
-        let mut indent_text = TextLayout::new();
-        indent_text.set_text(&format!("{indent_unit}a"), attrs_list);
+        let indent_text = TextLayout::new(&format!("{indent_unit}a"), attrs_list);
         let indent_text_width = indent_text.hit_position(indent_unit.len()).point.x;
 
         if ed.es.with(|s| s.show_indent_guide()) {
@@ -776,10 +775,8 @@ impl EditorView {
                     .family(&family)
                     .font_size(font_size);
                 let attrs_list = AttrsList::new(attrs);
-                let mut space_text = TextLayout::new();
-                space_text.set_text("·", attrs_list.clone());
-                let mut tab_text = TextLayout::new();
-                tab_text.set_text("→", attrs_list);
+                let space_text = TextLayout::new("·", attrs_list.clone());
+                let tab_text = TextLayout::new("→", attrs_list);
 
                 for (c, (x0, _x1)) in whitespaces.iter() {
                     match *c {

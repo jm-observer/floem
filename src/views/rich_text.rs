@@ -56,10 +56,7 @@ impl View for RichText {
         format!(
             "RichText: {:?}",
             self.text_layout
-                .lines()
-                .iter()
-                .map(|text| text.text())
-                .collect::<String>()
+                .line().text()
         )
         .into()
     }
@@ -226,13 +223,12 @@ impl IntoView for RichSpanOwned {
     type V = RichText;
 
     fn into_view(self) -> Self::V {
-        let mut layout = TextLayout::new();
         let mut attrs_list = AttrsList::new(Attrs::new().color(Color::BLACK));
         for span in self.spans {
             attrs_list.add_span(span.0, span.1.as_attrs());
         }
 
-        layout.set_text(&self.text, attrs_list);
+        let layout = TextLayout::new(&self.text, attrs_list);
         rich_text(move || layout.clone())
     }
 }

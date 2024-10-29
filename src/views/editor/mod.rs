@@ -1005,7 +1005,7 @@ impl Editor {
     /// The boolean indicates whether the point is within the text bounds.
     /// Points outside of vertical bounds will return the last line.
     /// Points outside of horizontal bounds will return the last column on the line.
-    pub fn line_col_of_point(&self, mode: Mode, point: Point) -> ((usize, usize), bool) {
+    pub fn line_col_of_point(&self, _mode: Mode, point: Point) -> ((usize, usize), bool) {
         // TODO: this assumes that line height is constant!
         let line_height = f64::from(self.style().line_height(self.id(), 0));
         let info = if point.y <= 0.0 {
@@ -1042,8 +1042,11 @@ impl Editor {
         let col = text_layout.phantom_text.before_col(hit_point.index);
         // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
         // right end will just go to the end of the line.
-        let max_col = self.line_end_col(line, mode != Mode::Normal);
-
+        // let max_col = self.line_end_col(line, mode != Mode::Normal);
+        let max_col = text_layout.text.line().text().len();
+        if line == 9 {
+            tracing::info!("col={col} max_col={max_col} {hit_point:?} {} {} visual_line={}", self.rope_text().line_content(line), text_layout.text.line().text(), text_layout.phantom_text.visual_line)
+        }
         let mut col = col.min(max_col);
 
         // TODO: we need to handle affinity. Clicking at end of a wrapped line should give it a
@@ -1051,10 +1054,10 @@ impl Editor {
 
         // TODO: this is a hack to get around text layouts not including spaces at the end of
         // wrapped lines, but we want to be able to click on them
-        if !hit_point.is_inside {
-            // TODO(minor): this is probably wrong in some manners
-            col = info.last_col(self.text_prov(), true);
-        }
+        // if !hit_point.is_inside {
+        //     // TODO(minor): this is probably wrong in some manners
+        //     col = info.last_col(self.text_prov(), true);
+        // }
 
         let tab_width = self.style().tab_width(self.id(), line);
         if self.style().atomic_soft_tabs(self.id(), line) && tab_width > 1 {
@@ -1065,6 +1068,7 @@ impl Editor {
                 SnapDirection::Nearest,
                 tab_width,
             );
+            tracing::info!("snap_to_soft_tab_line_col col={col}");
         }
 
         ((line, col), hit_point.is_inside)
@@ -1240,9 +1244,9 @@ fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a String, style
 ){
     let font_size = style.font_size(edid, line);
     // Combine the phantom text with the line content
-    let phantom_text = doc.phantom_text(edid, &es, line);
+    let phantom_text = doc.phantom_text(edid, es, line);
     // todo
-    let collapsed = phantom_text.combine_with_text(&line_content);
+    let collapsed = phantom_text.combine_with_text(line_content);
 
     let family = style.font_family(edid, line);
     let attrs = Attrs::new()
@@ -1312,16 +1316,22 @@ impl TextLayoutProvider for Editor {
                     // ?
                     continue;
                 }
-                tracing::info!("{offset_col} {phantom:?}");
+
                 phantom.col += offset_col;
                 phantom_text.text.push(phantom);
             }
         }
-
-        let mut text_layout = TextLayout::new();
+        if line == 9 {
+            tracing::info!("{}", phantom_text.visual_line);
+            for phantom in &phantom_text.text {
+                tracing::info!("{:?}", phantom);
+            }
+            tracing::info!("\n");
+        }
+        // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
-        text_layout.set_tab_width(style.tab_width(edid, line));
-        text_layout.set_text(&line_content, attrs_list);
+        let mut text_layout = TextLayout::new_tracing(line, &line_content, attrs_list);
+        // text_layout.set_tab_width(style.tab_width(edid, line));
 
         // dbg!(self.editor_style.with(|s| s.wrap_method()));
         match es.wrap_method() {

@@ -233,13 +233,18 @@ impl PhantomTextLine {
     /// Translate a column position into the position it would be before combining
     ///
     /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
+    ///
+    /// ????????
     pub fn before_col(&self, col: usize) -> usize {
         let mut last = col;
         // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
-        for (col_shift, size, hint_col, phantom) in self.offset_size_iter() {
+        for (mut col_shift, size, hint_col, phantom) in self.offset_size_iter() {
+            if self.visual_line == 10 {
+                tracing::info!("col_shift={col_shift} size={size} hint_col={hint_col} {phantom:?}");
+                // continue;
+            }
             if col_shift < 0 {
-                tracing::warn!("offset < 0 {:?}", phantom);
-                continue;
+                col_shift = 0;
             }
             if size < 0 {
                 tracing::debug!("size < 0 {:?}", phantom.kind);
@@ -247,15 +252,11 @@ impl PhantomTextLine {
                 continue;
             }
             let shifted_start = hint_col + col_shift as usize;
-            let shifted_end = shifted_start + size as usize;
-            tracing::warn!("col={col} visual_line={:?} hint_col={hint_col} col_shift={col_shift} shifted_start={shifted_start} shifted_end={shifted_end}"
-                , self.visual_line);
+            let shifted_end = hint_col + col_shift as usize + size as usize;
+
             if col >= shifted_start {
-                if col >= shifted_end {
-                    last = col - col_shift as usize - size as usize;
-                } else {
-                    return hint_col;
-                    // last = hint_col;
+                if col < shifted_end {
+                    return shifted_start;
                 }
             } else {
                 return last;

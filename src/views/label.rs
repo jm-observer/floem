@@ -171,14 +171,12 @@ impl Label {
     }
 
     fn set_text_layout(&mut self) {
-        let mut text_layout = TextLayout::new();
         let attrs_list = self.get_attrs_list();
-        text_layout.set_text(self.label.as_str(), attrs_list.clone());
+        let text_layout = TextLayout::new(self.label.as_str(), attrs_list.clone());
         self.text_layout = Some(text_layout);
 
         if let Some(new_text) = self.available_text.as_ref() {
-            let mut text_layout = TextLayout::new();
-            text_layout.set_text(new_text, attrs_list);
+            let text_layout = TextLayout::new(new_text, attrs_list);
             self.available_text_layout = Some(text_layout);
         }
     }
@@ -236,14 +234,14 @@ impl Label {
 
         match command {
             TextCommand::Copy => {
-                if let Some((start_c, end_c)) = &self.selection_range {
+                if self.selection_range.is_some() {
                     if let Some(ref text_layout) = self.text_layout {
-                        let start_line_idx = text_layout.lines_range()[start_c.line].start;
-                        let end_line_idx = text_layout.lines_range()[end_c.line].start;
-                        let start_idx = start_line_idx + start_c.index;
-                        let end_idx = end_line_idx + end_c.index;
-                        let selection_txt = self.label[start_idx..end_idx].into();
-                        let _ = Clipboard::set_contents(selection_txt);
+                        // let start_line_idx = text_layout.lines_range()[start_c.line].start;
+                        // let end_line_idx = text_layout.lines_range()[end_c.line].start;
+                        // let start_idx = start_line_idx + start_c.index;
+                        // let end_idx = end_line_idx + end_c.index;
+                        // let selection_txt = self.label[start_idx..end_idx].into();
+                        let _ = Clipboard::set_contents(text_layout.line().text().to_string());
                     }
                 }
                 true
@@ -444,8 +442,7 @@ impl View for Label {
         if text_overflow == TextOverflow::Ellipsis {
             if width > available_width {
                 if self.available_width != Some(available_width) {
-                    let mut dots_text = TextLayout::new();
-                    dots_text.set_text("...", self.get_attrs_list());
+                    let dots_text = TextLayout::new("...", self.get_attrs_list());
 
                     let dots_width = dots_text.size().width as f32;
                     let width_left = available_width - dots_width;

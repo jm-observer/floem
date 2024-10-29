@@ -454,10 +454,8 @@ impl TextInput {
 
     /// Determine approximate max size of a single glyph, given the current font weight & size
     fn get_font_glyph_max_size(&self) -> Size {
-        let mut tmp = TextLayout::new();
         let attrs_list = self.get_text_attrs();
-        tmp.set_text("W", attrs_list);
-        tmp.size()
+        TextLayout::new("W", attrs_list).size()
     }
 
     fn update_selection(&mut self, selection_start: usize, selection_stop: usize) {
@@ -475,11 +473,10 @@ impl TextInput {
     }
 
     fn update_text_layout(&mut self) {
-        let mut text_layout = TextLayout::new();
         let attrs_list = self.get_text_attrs();
 
-        self.buffer
-            .with_untracked(|buff| text_layout.set_text(buff, attrs_list.clone()));
+        let text_layout = self.buffer
+            .with_untracked(|buff| TextLayout::new(buff, attrs_list.clone()));
 
         let glyph_max_size = self.get_font_glyph_max_size();
         self.height = glyph_max_size.height as f32;
@@ -489,10 +486,7 @@ impl TextInput {
         self.text_buf = Some(text_layout.clone());
 
         if let Some(cr_text) = self.clipped_text.clone().as_ref() {
-            let mut clp_txt_lay = text_layout;
-            clp_txt_lay.set_text(cr_text, attrs_list);
-
-            self.clip_txt_buf = Some(clp_txt_lay);
+            self.clip_txt_buf = Some(TextLayout::new(cr_text, attrs_list));
         }
     }
 
@@ -1083,9 +1077,9 @@ impl View for TextInput {
 
             if self.placeholder_buff.is_none() {
                 if let Some(placeholder_text) = &self.placeholder_text {
-                    let mut placeholder_buff = TextLayout::new();
+
                     let attrs_list = self.get_placeholder_text_attrs();
-                    placeholder_buff.set_text(placeholder_text, attrs_list);
+                    let placeholder_buff = TextLayout::new(placeholder_text, attrs_list);
                     self.placeholder_buff = Some(placeholder_buff);
                 }
             }

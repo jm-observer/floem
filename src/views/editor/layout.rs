@@ -42,9 +42,7 @@ impl TextLayoutLine {
         // normal buffer lines, we can have more than one due to multiline phantom text. So we have
         // to sum over all of the entries line counts.
         self.text
-            .lines()
-            .iter()
-            .flat_map(|l| l.layout_opt().as_deref())
+            .line().layout_opt().into_iter()
             .flat_map(|ls| ls.iter())
             .filter(|l| !l.glyphs.is_empty())
     }
@@ -57,28 +55,21 @@ impl TextLayoutLine {
     ) -> impl Iterator<Item = (usize, usize)> + 'a {
         let mut prefix = None;
         // Include an entry if there is nothing
-        if self.text.lines().len() == 1 {
-            let line_start = self.text.lines_range()[0].start;
-            if let Some(layouts) = self.text.lines()[0].layout_opt().as_deref() {
+            let line_start = self.text.lines_range.start;
+            if let Some(layouts) = self.text.line().layout_opt().as_deref() {
                 // Do we need to require !layouts.is_empty()?
                 if !layouts.is_empty() && layouts.iter().all(|l| l.glyphs.is_empty()) {
                     // We assume the implicit glyph start is zero
                     prefix = Some((line_start, line_start));
                 }
             }
-        }
 
         let line_v = line;
         let iter = self
             .text
-            .lines()
-            .iter()
-            .zip(self.text.lines_range().iter())
-            .filter_map(|(line, line_range)| {
-                line.layout_opt()
-                    .as_deref()
-                    .map(|ls| (line, line_range, ls))
-            })
+            .line().layout_opt().into_iter().map(|x| (self
+                                                                        .text
+                                                                        .line(), self.text.lines_range(), x))
             .flat_map(|(line, line_range, ls)| ls.iter().map(move |l| (line, line_range, l)))
             .filter(|(_, _, l)| !l.glyphs.is_empty())
             .map(move |(tl_line, line_range, l)| {

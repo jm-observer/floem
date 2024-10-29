@@ -31,7 +31,6 @@ use super::{
     command::{Command, CommandExecuted},
     gutter::GutterClass,
     id::EditorId,
-    layout::TextLayoutLine,
     normal_compute_screen_lines,
     phantom_text::{PhantomText, PhantomTextKind, PhantomTextLine},
     view::{ScreenLines, ScreenLinesBase},
