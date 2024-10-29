@@ -255,8 +255,11 @@ impl PhantomTextLine {
             let shifted_end = hint_col + col_shift as usize + size as usize;
 
             if col >= shifted_start {
-                if col < shifted_end {
-                    return shifted_start;
+                if col >= shifted_end {
+                    last = col - col_shift as usize - size as usize;
+                } else {
+                    return hint_col;
+                    // last = hint_col;
                 }
             } else {
                 return last;

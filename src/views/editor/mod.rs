@@ -1044,9 +1044,9 @@ impl Editor {
         // right end will just go to the end of the line.
         // let max_col = self.line_end_col(line, mode != Mode::Normal);
         let max_col = text_layout.text.line().text().len();
-        if line == 9 {
-            tracing::info!("col={col} max_col={max_col} {hit_point:?} {} {} visual_line={}", self.rope_text().line_content(line), text_layout.text.line().text(), text_layout.phantom_text.visual_line)
-        }
+        // if line == 9 {
+        //     tracing::info!("col={col} max_col={max_col} {hit_point:?} {} {} visual_line={}", self.rope_text().line_content(line), text_layout.text.line().text(), text_layout.phantom_text.visual_line)
+        // }
         let mut col = col.min(max_col);
 
         // TODO: we need to handle affinity. Clicking at end of a wrapped line should give it a
@@ -1321,13 +1321,13 @@ impl TextLayoutProvider for Editor {
                 phantom_text.text.push(phantom);
             }
         }
-        if line == 9 {
-            tracing::info!("{}", phantom_text.visual_line);
-            for phantom in &phantom_text.text {
-                tracing::info!("{:?}", phantom);
-            }
-            tracing::info!("\n");
-        }
+        // if line == 9 {
+        //     tracing::info!("{}", phantom_text.visual_line);
+        //     for phantom in &phantom_text.text {
+        //         tracing::info!("{:?}", phantom);
+        //     }
+        //     tracing::info!("\n");
+        // }
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
         let mut text_layout = TextLayout::new_tracing(line, &line_content, attrs_list);

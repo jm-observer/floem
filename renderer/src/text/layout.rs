@@ -517,9 +517,6 @@ impl TextLayout {
 
     pub fn hit_point(&self, point: Point) -> HitPoint {
         if let Some(cursor) = self.hit(point.x as f32, point.y as f32) {
-            if self.line == 9 {
-                println!("999999999999");
-            }
             let size = self.size();
             let is_inside = point.x <= size.width && point.y <= size.height;
             HitPoint {
@@ -692,13 +689,13 @@ impl TextLayout {
     }
 
     pub fn size(&self) -> Size {
-        let line = self.line;
+        // let line = self.line;
         self.layout_runs()
             .fold(Size::new(0.0, 0.0), |mut size, run| {
                 let new_width = run.line_w as f64;
-                if line == 9 {
-                    println!("new_width {new_width}");
-                }
+                // if line == 9 {
+                //     println!("new_width {new_width}");
+                // }
                 if new_width > size.width {
                     size.width = new_width;
                 }
