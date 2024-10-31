@@ -1321,13 +1321,13 @@ impl TextLayoutProvider for Editor {
                 phantom_text.text.push(phantom);
             }
         }
-        // if line == 9 {
-        //     tracing::info!("{}", phantom_text.visual_line);
-        //     for phantom in &phantom_text.text {
-        //         tracing::info!("{:?}", phantom);
-        //     }
-        //     tracing::info!("\n");
-        // }
+        if line == 9 {
+            tracing::info!("{}", phantom_text.visual_line);
+            for phantom in &phantom_text.text {
+                tracing::info!("{:?}", phantom);
+            }
+            tracing::info!("\n");
+        }
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
         let mut text_layout = TextLayout::new_tracing(line, &line_content, attrs_list);

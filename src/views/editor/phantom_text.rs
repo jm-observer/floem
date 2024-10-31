@@ -69,15 +69,15 @@ impl PhantomTextLine {
     ) {
         // Apply phantom text specific styling
         for (offset, size, col, phantom) in self.offset_size_iter() {
-            if offset < 0 {
-                tracing::debug!("offset < 0 {:?}", phantom);
-                continue;
-            }
-            if size < 0 {
-                tracing::debug!("size < 0 {:?}", phantom.kind);
-                assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                continue;
-            }
+            // if offset < 0 {
+            //     tracing::debug!("offset < 0 {:?}", phantom);
+            //     continue;
+            // }
+            // if size < 0 {
+            //     tracing::debug!("size < 0 {:?}", phantom.kind);
+            //     assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+            //     continue;
+            // }
 
             let offset = offset as usize;
             let size = size as usize;
@@ -109,19 +109,18 @@ impl PhantomTextLine {
     /// Translate a column position into the text into what it would be after combining
     /// 求原始文本在最终文本的位置
     pub fn col_at(&self, pre_col: usize) -> Option<usize> {
-        let pre_col = pre_col as i32;
         let mut last = pre_col;
         for (col_shift, size, col, phantom) in self.offset_size_iter() {
             // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
             // 所以原始文本在最终文本的位置= 原始位置 + 之前的幽灵文本总长度
-            if col_shift < 0 {
-                tracing::debug!("offset < 0 {:?}", phantom);
-            }
-            if size < 0 {
-                tracing::debug!("size < 0 {:?}", phantom.kind);
-                assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-            }
-            let col = col as i32;
+            // if col_shift < 0 {
+            //     tracing::debug!("offset < 0 {:?}", phantom);
+            // }
+            // if size < 0 {
+            //     tracing::debug!("size < 0 {:?}", phantom.kind);
+            //     assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+            // }
+            // let col = col;
             // tracing::info!("pre_col={pre_col} = col_shift={col_shift} size={size} col={col} {}", phantom.text);
             if pre_col >= col {
                 last = pre_col + col_shift + size;
@@ -129,11 +128,7 @@ impl PhantomTextLine {
                 break;
             }
         }
-        if last < 0 {
-            None
-        } else {
-            Some(last as usize)
-        }
+            Some(last)
     }
 
     /// Translate a column position into the text into what it would be after combining
@@ -145,15 +140,15 @@ impl PhantomTextLine {
     pub fn col_after(&self, pre_col: usize, before_cursor: bool) -> usize {
         let mut last = pre_col;
         for (col_shift, size, col, text) in self.offset_size_iter() {
-            if col_shift < 0 {
-                tracing::warn!("offset < 0 {:?}", text);
-                // continue;
-            }
-            if size < 0 {
-                // tracing::debug!("size < 0 {:?}", text.kind);
-                assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                // continue;
-            }
+            // if col_shift < 0 {
+            //     tracing::warn!("offset < 0 {:?}", text);
+            //     // continue;
+            // }
+            // if size < 0 {
+            //     // tracing::debug!("size < 0 {:?}", text.kind);
+            //     assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+            //     // continue;
+            // }
 
             let before_cursor = match text.affinity {
                 Some(CursorAffinity::Forward) => true,
@@ -176,15 +171,15 @@ impl PhantomTextLine {
     pub fn col_after_force(&self, pre_col: usize, before_cursor: bool) -> usize {
         let mut last = pre_col;
         for (col_shift, size, col, text) in self.offset_size_iter() {
-            if col_shift < 0 {
-                tracing::warn!("offset < 0 {:?}", text);
-                // continue;
-            }
-            if size < 0 {
-                tracing::debug!("size < 0 {:?}", text.kind);
-                assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                // continue;
-            }
+            // if col_shift < 0 {
+            //     tracing::warn!("offset < 0 {:?}", text);
+            //     // continue;
+            // }
+            // if size < 0 {
+            //     tracing::debug!("size < 0 {:?}", text.kind);
+            //     assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+            //     // continue;
+            // }
             if pre_col > col || (pre_col == col && before_cursor) {
                 last = pre_col + col_shift as usize + size as usize;
             }
@@ -212,15 +207,15 @@ impl PhantomTextLine {
             if skip(phantom) {
                 continue;
             }
-            if col_shift < 0 {
-                tracing::warn!("offset < 0 {:?}", phantom);
-                continue;
-            }
-            if size < 0 {
-                tracing::debug!("size < 0 {:?}", phantom.kind);
-                assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                continue;
-            }
+            // if col_shift < 0 {
+            //     tracing::warn!("offset < 0 {:?}", phantom);
+            //     continue;
+            // }
+            // if size < 0 {
+            //     tracing::debug!("size < 0 {:?}", phantom.kind);
+            //     assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+            //     continue;
+            // }
 
             if pre_col > col || (pre_col == col && before_cursor) {
                 last = pre_col + col_shift as usize + size as usize;
@@ -232,25 +227,25 @@ impl PhantomTextLine {
 
     /// Translate a column position into the position it would be before combining
     ///
-    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
+    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义在于计算光标的位置（光标是用原始文本的offset来记录位置的）
     ///
-    /// ????????
+    /// return (line, index)
     pub fn before_col(&self, col: usize) -> usize {
         let mut last = col;
+        let mut line = self.visual_line - 1;
         // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
         for (mut col_shift, size, hint_col, phantom) in self.offset_size_iter() {
+            if let PhantomTextKind::FoldedRangStart { same_line, end_line, end_character } = &phantom.kind {
+                if !same_line {
+                    line = *end_line as usize;
+                }
+            }
             if self.visual_line == 10 {
                 tracing::info!("col_shift={col_shift} size={size} hint_col={hint_col} {phantom:?}");
-                // continue;
             }
-            if col_shift < 0 {
-                col_shift = 0;
-            }
-            if size < 0 {
-                tracing::debug!("size < 0 {:?}", phantom.kind);
-                assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                continue;
-            }
+            // if col_shift < 0 {
+            //     col_shift = 0;
+            // }
             let shifted_start = hint_col + col_shift as usize;
             let shifted_end = hint_col + col_shift as usize + size as usize;
 
@@ -258,11 +253,11 @@ impl PhantomTextLine {
                 if col >= shifted_end {
                     last = col - col_shift as usize - size as usize;
                 } else {
-                    return hint_col;
-                    // last = hint_col;
+                    last = hint_col;
+                    break;
                 }
             } else {
-                return last;
+                break;
             }
         }
         last
@@ -331,8 +326,8 @@ impl PhantomTextLine {
     ///
     /// 所以原始文本在最终文本的位置= 原始位置 + 之前的幽灵文本总长度
     ///
-    pub fn offset_size_iter(&self) -> impl Iterator<Item = (i32, i32, usize, &PhantomText)> + '_ {
-        let mut col_shift = 0i32;
+    pub fn offset_size_iter(&self) -> impl Iterator<Item = (usize, usize, usize, &PhantomText)> + '_ {
+        let mut col_shift = 0usize;
         self.text.iter().map(move |phantom| {
             let rs = match phantom.kind {
                 PhantomTextKind::FoldedRangStart {
@@ -342,29 +337,29 @@ impl PhantomTextLine {
                 } => {
                     let pre_col_shift = col_shift;
                     if same_line {
-                        col_shift = col_shift + phantom.text.len() as i32
-                            - (end_character as usize - phantom.col) as i32;
+                        col_shift = col_shift + phantom.text.len()
+                            - (end_character as usize - phantom.col) ;
                     } else {
-                        col_shift += phantom.text.len() as i32;
+                        col_shift += phantom.text.len();
                     }
 
                     (
                         pre_col_shift,
-                        phantom.text.len() as i32,
+                        phantom.text.len(),
                         phantom.col,
                         phantom,
                     )
                 }
                 PhantomTextKind::CrossLineFoldedRangEnd => {
-                    col_shift -= phantom.col as i32;
-                    (0, -(phantom.col as i32), phantom.col, phantom)
+                    // col_shift -= phantom.col;
+                    (0, 0, phantom.col, phantom)
                 }
                 _ => {
                     let pre_col_shift = col_shift;
-                    col_shift += phantom.text.len() as i32;
+                    col_shift += phantom.text.len();
                     (
                         pre_col_shift,
-                        phantom.text.len() as i32,
+                        phantom.text.len(),
                         phantom.col,
                         phantom,
                     )
@@ -385,17 +380,17 @@ impl PhantomTextLine {
 
     pub fn apply_attr_styles(&self, default: Attrs, attrs_list: &mut AttrsList) {
         for (offset, size, col, phantom) in self.offset_size_iter() {
-            if offset < 0 {
-                tracing::warn!("apply_attr_styles offset < 0 {:?}", phantom);
-                continue;
-            }
-            if size < 0 {
-                tracing::debug!("apply_attr_styles size < 0 {:?}", phantom.kind);
-                assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-                continue;
-            }
-            let start = col + offset as usize;
-            let end = start + size as usize;
+            // if offset < 0 {
+            //     tracing::warn!("apply_attr_styles offset < 0 {:?}", phantom);
+            //     continue;
+            // }
+            // if size < 0 {
+            //     tracing::debug!("apply_attr_styles size < 0 {:?}", phantom.kind);
+            //     assert_eq!(phantom.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+            //     continue;
+            // }
+            let start = col + offset;
+            let end = start + size;
 
             let mut attrs = default;
             if let Some(fg) = phantom.fg {
@@ -407,5 +402,28 @@ impl PhantomTextLine {
 
             attrs_list.add_span(start..end, attrs);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+/**
+    if a.0 {
+        println!("start");
+    } else {
+        println!("end");
+    }
+**/
+/**
+    if a.0 {...} else {...}
+ **/
+/**
+    if a.0 {...} else {
+        println!("end");
+    }
+ **/
+    fn init() {
+
     }
 }
