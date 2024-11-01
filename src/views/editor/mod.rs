@@ -31,7 +31,6 @@ use floem_editor_core::{
     movement::Movement,
     register::Register,
     selection::Selection,
-    soft_tab::{snap_to_soft_tab_line_col, SnapDirection},
 };
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith, Trigger};
 use lapce_xi_rope::Rope;
@@ -52,9 +51,7 @@ pub mod view;
 pub mod visual_line;
 
 pub use floem_editor_core as core;
-use lapce_xi_rope::tree::Leaf;
 use peniko::Brush;
-use crate::views::editor::phantom_text::PhantomTextKind;
 
 use self::{
     command::Command,
@@ -1328,7 +1325,6 @@ impl TextLayoutProvider for Editor {
             for (rangs, attrs) in collapsed_attrs_list.spans() {
                 attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
             }
-            let mut offset_col = offset_col;
             for mut phantom in next_phantom_text.text {
                 // if let PhantomTextKind::CrossLineFoldedRangEnd = phantom.kind {
                 //     offset_col -= phantom.col;

@@ -295,12 +295,12 @@ impl PhantomTextLine {
     /// return (line, index)
     pub fn before_col(&self, col: usize) -> usize {
         let mut last = col;
-        let mut line = self.visual_line - 1;
+        let mut _line = self.visual_line - 1;
         // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
-        for (mut col_shift, size, (_, hint_col), phantom) in self.offset_size_iter() {
-            if let PhantomTextKind::FoldedRangStart { same_line, end_line, end_character } = &phantom.kind {
+        for (col_shift, size, (_, hint_col), phantom) in self.offset_size_iter() {
+            if let PhantomTextKind::FoldedRangStart { same_line, end_line, .. } = &phantom.kind {
                 if !same_line {
-                    line = *end_line as usize;
+                    _line = *end_line as usize;
                 }
             }
             if self.visual_line == 10 {
@@ -343,7 +343,7 @@ impl PhantomTextLine {
         let mut last_final_col = 0;
         let mut last_origin_col = 0;
         // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
-        for (col_shift, size, (origin_line, origin_col), (final_line, final_col), phantom) in self.offset_size_iter_2() {
+        for (_col_shift, size, (origin_line, origin_col), (_final_line, final_col), _phantom) in self.offset_size_iter_2() {
             let shifted_start = final_col;
             let shifted_end = final_col + size;
             if col >= shifted_end {
