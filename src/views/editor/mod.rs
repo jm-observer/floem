@@ -52,6 +52,7 @@ pub mod view;
 pub mod visual_line;
 
 pub use floem_editor_core as core;
+use lapce_xi_rope::tree::Leaf;
 use peniko::Brush;
 use crate::views::editor::phantom_text::PhantomTextKind;
 
@@ -515,7 +516,8 @@ impl Editor {
 
     pub fn single_click(&self, pointer_event: &PointerInputEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
-        let (new_offset, _) = self.offset_of_point(mode, pointer_event.pos);
+        let (new_offset, _) = self.offset_of_point(mode, pointer_event.pos, true);
+        tracing::info!("new_offset={new_offset}");
         self.cursor.update(|cursor| {
             cursor.set_offset(
                 new_offset,
@@ -527,7 +529,7 @@ impl Editor {
 
     pub fn double_click(&self, pointer_event: &PointerInputEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
-        let (mouse_offset, _) = self.offset_of_point(mode, pointer_event.pos);
+        let (mouse_offset, _) = self.offset_of_point(mode, pointer_event.pos, false);
         let (start, end) = self.select_word(mouse_offset);
 
         self.cursor.update(|cursor| {
@@ -542,7 +544,7 @@ impl Editor {
 
     pub fn triple_click(&self, pointer_event: &PointerInputEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
-        let (mouse_offset, _) = self.offset_of_point(mode, pointer_event.pos);
+        let (mouse_offset, _) = self.offset_of_point(mode, pointer_event.pos, false);
         let line = self.line_of_offset(mouse_offset);
         let start = self.offset_of_line(line);
         let end = self.offset_of_line(line + 1);
@@ -559,7 +561,7 @@ impl Editor {
 
     pub fn pointer_move(&self, pointer_event: &PointerMoveEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
-        let (offset, _is_inside) = self.offset_of_point(mode, pointer_event.pos);
+        let (offset, _is_inside) = self.offset_of_point(mode, pointer_event.pos, false);
         if self.active.get_untracked() && self.cursor.with_untracked(|c| c.offset()) != offset {
             self.cursor
                 .update(|cursor| cursor.set_offset(offset, true, pointer_event.modifiers.alt()));
@@ -572,7 +574,7 @@ impl Editor {
 
     fn right_click(&self, pointer_event: &PointerInputEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
-        let (offset, _) = self.offset_of_point(mode, pointer_event.pos);
+        let (offset, _) = self.offset_of_point(mode, pointer_event.pos, false);
         let doc = self.doc();
         let pointer_inside_selection = self
             .cursor
@@ -961,8 +963,11 @@ impl Editor {
     /// The boolean indicates whether the point is inside the text or not
     /// Points outside of vertical bounds will return the last line.
     /// Points outside of horizontal bounds will return the last column on the line.
-    pub fn offset_of_point(&self, mode: Mode, point: Point) -> (usize, bool) {
-        let ((line, col), is_inside) = self.line_col_of_point(mode, point);
+    pub fn offset_of_point(&self, mode: Mode, point: Point, tracing: bool) -> (usize, bool) {
+        let ((line, col), is_inside) = self.line_col_of_point(mode, point, tracing);
+        if tracing {
+            tracing::info!("line={line} col={col} is_inside={is_inside}");
+        }
         (self.offset_of_line_col(line, col), is_inside)
     }
 
@@ -1005,7 +1010,7 @@ impl Editor {
     /// The boolean indicates whether the point is within the text bounds.
     /// Points outside of vertical bounds will return the last line.
     /// Points outside of horizontal bounds will return the last column on the line.
-    pub fn line_col_of_point(&self, _mode: Mode, point: Point) -> ((usize, usize), bool) {
+    pub fn line_col_of_point(&self, _mode: Mode, point: Point, tracing: bool) -> ((usize, usize), bool) {
         // TODO: this assumes that line height is constant!
         let line_height = f64::from(self.style().line_height(self.id(), 0));
         let info = if point.y <= 0.0 {
@@ -1039,15 +1044,15 @@ impl Editor {
         let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
         // We have to unapply the phantom text shifting in order to get back to the column in
         // the actual buffer
-        let col = text_layout.phantom_text.before_col(hit_point.index);
+        let (line, col) = text_layout.phantom_text.before_col_2(hit_point.index, tracing);
         // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
         // right end will just go to the end of the line.
         // let max_col = self.line_end_col(line, mode != Mode::Normal);
-        let max_col = text_layout.text.line().text().len();
+        // let max_col = text_layout.text.line().text().len();
         // if line == 9 {
         //     tracing::info!("col={col} max_col={max_col} {hit_point:?} {} {} visual_line={}", self.rope_text().line_content(line), text_layout.text.line().text(), text_layout.phantom_text.visual_line)
         // }
-        let mut col = col.min(max_col);
+        // let mut col = col.min(max_col);
 
         // TODO: we need to handle affinity. Clicking at end of a wrapped line should give it a
         // backwards affinity, while being at the start of the next line should be a forwards aff
@@ -1059,17 +1064,17 @@ impl Editor {
         //     col = info.last_col(self.text_prov(), true);
         // }
 
-        let tab_width = self.style().tab_width(self.id(), line);
-        if self.style().atomic_soft_tabs(self.id(), line) && tab_width > 1 {
-            col = snap_to_soft_tab_line_col(
-                &self.text(),
-                line,
-                col,
-                SnapDirection::Nearest,
-                tab_width,
-            );
-            tracing::info!("snap_to_soft_tab_line_col col={col}");
-        }
+        // let tab_width = self.style().tab_width(self.id(), line);
+        // if self.style().atomic_soft_tabs(self.id(), line) && tab_width > 1 {
+        //     col = snap_to_soft_tab_line_col(
+        //         &self.text(),
+        //         line,
+        //         col,
+        //         SnapDirection::Nearest,
+        //         tab_width,
+        //     );
+        //     tracing::info!("snap_to_soft_tab_line_col col={col}");
+        // }
 
         ((line, col), hit_point.is_inside)
     }
@@ -1160,6 +1165,7 @@ impl Editor {
             .try_get_text_layout(cache_rev, self.config_id(), line)
     }
 
+    #[allow(dead_code)]
     /// Create rendable whitespace layout by creating a new text layout
     /// with invisible spaces and special utf8 characters that display
     /// the different white space characters.
@@ -1230,23 +1236,28 @@ impl Editor {
 
 fn strip_suffix(line_content_original: &str) -> String {
     if let Some(s) = line_content_original.strip_suffix("\r\n") {
-        format!("{s}  ")
+        s.to_string()
     } else if let Some(s) = line_content_original.strip_suffix('\n') {
-        format!("{s} ",)
+        s.to_string()
     } else {
         line_content_original.to_string()
     }
 }
 
 
-fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a String, style: Rc<dyn Styling>, edid: EditorId
-                                    , es: &'a EditorStyle, doc: Rc<dyn Document>, collapsed_line_col: usize) -> (PhantomTextLine, Cow<'a , str>, AttrsList, Option<(u32, u32)>
+fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a str, style: Rc<dyn Styling>, edid: EditorId
+                                    , es: &'a EditorStyle, doc: Rc<dyn Document>, collapsed_line_col: usize) -> (PhantomTextLine, Cow<'a , str>, AttrsList, Option<(usize, usize)>
 ){
     let font_size = style.font_size(edid, line);
     // Combine the phantom text with the line content
     let phantom_text = doc.phantom_text(edid, es, line);
     // todo
     let collapsed = phantom_text.combine_with_text(line_content);
+
+
+    // if line == 10 || line == 12 {
+    //     tracing::info!("line={line} collapsed_line_col={collapsed_line_col} ");
+    // }
 
     let family = style.font_family(edid, line);
     let attrs = Attrs::new()
@@ -1295,39 +1306,47 @@ impl TextLayoutProvider for Editor {
         let (mut phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
             = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0);
 
+        // if line == 8 {
+        //     tracing::info!("{line_content:?}");
+        // }
         let mut line_content = line_content.to_string();
         while let Some((collapsed_line, ..)) = collapsed_line_col.take() {
-            let line = collapsed_line as usize;
-            let line_content_original = text.line_content(line);
+            let line_content_original = text.line_content(collapsed_line);
             let next_line_content = strip_suffix(&line_content_original);
             let offset_col = line_content.len();
             let (next_phantom_text, collapsed_line_content, collapsed_attrs_list, next_collapsed_line_col)
-                = calcuate_line_text_and_style(collapsed_line as usize, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col);
+                = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col);
             collapsed_line_col = next_collapsed_line_col;
 
+            // if collapsed_line == 10 || collapsed_line == 12 {
+            //     next_phantom_text.log();
+            // }
+            // if line == 8 {
+            //     tracing::info!("{collapsed_line_content:?}");
+            // }
             line_content.push_str(&collapsed_line_content);
             for (rangs, attrs) in collapsed_attrs_list.spans() {
                 attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
             }
             let mut offset_col = offset_col;
             for mut phantom in next_phantom_text.text {
-                if let PhantomTextKind::CrossLineFoldedRangEnd = phantom.kind {
-                    offset_col -= phantom.col;
-                    // ?
-                    continue;
-                }
-
-                phantom.col += offset_col;
+                // if let PhantomTextKind::CrossLineFoldedRangEnd = phantom.kind {
+                //     offset_col -= phantom.col;
+                // }
+                phantom.final_col += offset_col;
                 phantom_text.text.push(phantom);
             }
         }
-        if line == 9 {
-            tracing::info!("{}", phantom_text.visual_line);
-            for phantom in &phantom_text.text {
-                tracing::info!("{:?}", phantom);
-            }
-            tracing::info!("\n");
-        }
+        // if line == 8 {
+        //     tracing::info!("{line_content:?}");
+        // }
+        phantom_text.update_origin_text_len(line_content.len());
+        // if line == 8 {
+        //     phantom_text.log("new_text_layout");
+        //     // for span in attrs_list.spans() {
+        //     //     tracing::info!("{}-{}", span.0.start, span.0.end);
+        //     // }
+        // }
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
         let mut text_layout = TextLayout::new_tracing(line, &line_content, attrs_list);

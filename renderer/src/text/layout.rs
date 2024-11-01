@@ -196,7 +196,7 @@ pub struct HitPoint {
     /// position in that line.
     pub is_inside: bool,
 }
-
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TextLayout {
     // only for tracing

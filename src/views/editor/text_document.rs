@@ -246,12 +246,14 @@ impl Document for TextDocument {
 impl DocumentPhantom for TextDocument {
     fn phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextLine {
         let mut text = SmallVec::new();
-
+        let mut origin_text_len = 0;
         if self.buffer.with_untracked(Buffer::is_empty) {
             if let Some(placeholder) = self.placeholder(edid) {
+                origin_text_len = placeholder.len();
                 text.push(PhantomText {
-                    kind: PhantomTextKind::Placeholder,
+                    kind: PhantomTextKind::Placeholder, line,
                     col: 0,
+                    final_col: 0,
                     affinity: None,
                     text: placeholder,
                     font_size: None,
@@ -264,12 +266,11 @@ impl DocumentPhantom for TextDocument {
 
         if let Some(preedit) = self.preedit_phantom(Some(styling.preedit_underline_color()), line) {
             text.push(preedit);
+            let rope_text = self.rope_text();
+            origin_text_len = rope_text.offset_of_line(line + 1) - rope_text.offset_of_line(line);
         }
 
-        PhantomTextLine {
-            text,
-            visual_line: line + 1,
-        }
+        PhantomTextLine::new(line, origin_text_len, text)
     }
 
     fn has_multiline_phantom(&self, edid: EditorId, _styling: &EditorStyle) -> bool {

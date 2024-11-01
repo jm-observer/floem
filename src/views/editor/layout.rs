@@ -56,7 +56,7 @@ impl TextLayoutLine {
         let mut prefix = None;
         // Include an entry if there is nothing
             let line_start = self.text.lines_range.start;
-            if let Some(layouts) = self.text.line().layout_opt().as_deref() {
+            if let Some(layouts) = self.text.line().layout_opt() {
                 // Do we need to require !layouts.is_empty()?
                 if !layouts.is_empty() && layouts.iter().all(|l| l.glyphs.is_empty()) {
                     // We assume the implicit glyph start is zero

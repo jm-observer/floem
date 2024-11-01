@@ -140,9 +140,10 @@ pub trait Document: DocumentPhantom + Downcast {
         }
 
         Some(PhantomText {
-            kind: PhantomTextKind::Ime,
+            kind: PhantomTextKind::Ime, line,
             text: preedit.text,
             affinity: None,
+            final_col: col,
             col,
             font_size: None,
             fg: None,
@@ -350,6 +351,7 @@ pub trait Styling {
     ) {
     }
 
+    /// todo ? 幽灵文本的样式
     fn apply_layout_styles(
         &self,
         _layout: &TextLayout,
