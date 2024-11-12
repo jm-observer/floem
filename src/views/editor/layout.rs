@@ -3,8 +3,9 @@ use crate::{
     text::{LayoutLine, TextLayout},
 };
 use floem_editor_core::buffer::rope_text::RopeText;
+use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
-use super::{Editor, phantom_text::PhantomTextLine, visual_line::TextLayoutProvider};
+use super::{Editor, visual_line::TextLayoutProvider};
 
 #[derive(Clone, Debug)]
 pub struct LineExtraStyle {
@@ -26,7 +27,7 @@ pub struct TextLayoutLine {
     pub text: TextLayout,
     pub whitespaces: Option<Vec<(char, (f64, f64))>>,
     pub indent: f64,
-    pub phantom_text: PhantomTextLine,
+    pub phantom_text: PhantomTextMultiLine,
 }
 
 impl TextLayoutLine {

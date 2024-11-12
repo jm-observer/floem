@@ -52,6 +52,7 @@ pub mod visual_line;
 
 pub use floem_editor_core as core;
 use peniko::Brush;
+use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use self::{
     command::Command,
@@ -1233,9 +1234,9 @@ impl Editor {
 
 fn strip_suffix(line_content_original: &str) -> String {
     if let Some(s) = line_content_original.strip_suffix("\r\n") {
-        s.to_string()
+        format!("{s}  ")
     } else if let Some(s) = line_content_original.strip_suffix('\n') {
-        s.to_string()
+        format!("{s} ",)
     } else {
         line_content_original.to_string()
     }
@@ -1300,12 +1301,14 @@ impl TextLayoutProvider for Editor {
         // though we immediately combine with phantom text so that's a thing.
         let line_content = strip_suffix(&line_content_original);
 
-        let (mut phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
+        let (phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
             = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0);
 
-        // if line == 8 {
-        //     tracing::info!("{line_content:?}");
-        // }
+        let mut phantom_text = PhantomTextMultiLine::new(phantom_text);
+        if line == 1 {
+            tracing::info!("{line_content:?} {}", line_content.len());
+            phantom_text.log("start");
+        }
         let mut line_content = line_content.to_string();
         while let Some((collapsed_line, ..)) = collapsed_line_col.take() {
             let line_content_original = text.line_content(collapsed_line);
@@ -1315,28 +1318,20 @@ impl TextLayoutProvider for Editor {
                 = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col);
             collapsed_line_col = next_collapsed_line_col;
 
-            // if collapsed_line == 10 || collapsed_line == 12 {
-            //     next_phantom_text.log();
-            // }
-            // if line == 8 {
-            //     tracing::info!("{collapsed_line_content:?}");
-            // }
             line_content.push_str(&collapsed_line_content);
+            if line == 1 {
+                tracing::info!("collapsed_line_content={collapsed_line_content:?} {}", collapsed_line_content.len());
+                tracing::info!("line_content={line_content:?} {}", line_content.len());
+            }
             for (rangs, attrs) in collapsed_attrs_list.spans() {
                 attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
             }
-            for mut phantom in next_phantom_text.text {
-                // if let PhantomTextKind::CrossLineFoldedRangEnd = phantom.kind {
-                //     offset_col -= phantom.col;
-                // }
-                phantom.final_col += offset_col;
-                phantom_text.text.push(phantom);
-            }
+            phantom_text.merge(next_phantom_text);
         }
-        // if line == 8 {
-        //     tracing::info!("{line_content:?}");
-        // }
-        phantom_text.update_origin_text_len(line_content.len());
+        if line == 1 {
+            phantom_text.log("end");
+        }
+        phantom_text.update_final_text_len(line_content.len());
         // if line == 8 {
         //     phantom_text.log("new_text_layout");
         //     // for span in attrs_list.spans() {

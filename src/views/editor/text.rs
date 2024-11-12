@@ -25,6 +25,7 @@ use lapce_xi_rope::Rope;
 use serde::{Deserialize, Serialize};
 use floem_renderer::text::TextLayout;
 use crate::views::editor::layout::LineExtraStyle;
+use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use super::{
     actions::CommonAction,
@@ -355,7 +356,7 @@ pub trait Styling {
     fn apply_layout_styles(
         &self,
         _layout: &TextLayout,
-        _phantom_text: &PhantomTextLine,
+        _phantom_text: &PhantomTextMultiLine,
         _collapsed_line_col: usize,
     ) -> Vec<LineExtraStyle>;
 
@@ -709,7 +710,7 @@ impl Styling for SimpleStyling {
     }
 
     fn apply_layout_styles(
-        &self, _layout: &TextLayout, _phantom_text: &PhantomTextLine,
+        &self, _layout: &TextLayout, _phantom_text: &PhantomTextMultiLine,
         _collapsed_line_col: usize,
     )-> Vec<LineExtraStyle> {
     Vec::new()

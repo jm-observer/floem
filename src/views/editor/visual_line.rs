@@ -106,7 +106,9 @@ impl VLine {
 /// A visual line relative to some other line within the editor view.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RVLine {
-    /// The buffer line this is for
+    /// The buffer line this is for.
+    ///
+    /// 原始文本的行号，从0开始
     pub line: usize,
     /// The index of the actual visual line's layout
     pub line_index: usize,
