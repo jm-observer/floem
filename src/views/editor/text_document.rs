@@ -273,31 +273,31 @@ impl DocumentPhantom for TextDocument {
         PhantomTextLine::new(line, origin_text_len, text)
     }
 
-    fn has_multiline_phantom(&self, edid: EditorId, _styling: &EditorStyle) -> bool {
-        if !self.buffer.with_untracked(Buffer::is_empty) {
-            return false;
-        }
-
-        let placeholder_ml = self.placeholders.with_untracked(|placeholder| {
-            let Some(placeholder) = placeholder.get(&edid) else {
-                return false;
-            };
-
-            placeholder.lines().count() > 1
-        });
-
-        if placeholder_ml {
-            return true;
-        }
-
-        self.preedit.preedit.with_untracked(|preedit| {
-            let Some(preedit) = preedit else {
-                return false;
-            };
-
-            preedit.text.lines().count() > 1
-        })
-    }
+    // fn has_multiline_phantom(&self, edid: EditorId, _styling: &EditorStyle) -> bool {
+    //     if !self.buffer.with_untracked(Buffer::is_empty) {
+    //         return false;
+    //     }
+    //
+    //     let placeholder_ml = self.placeholders.with_untracked(|placeholder| {
+    //         let Some(placeholder) = placeholder.get(&edid) else {
+    //             return false;
+    //         };
+    //
+    //         placeholder.lines().count() > 1
+    //     });
+    //
+    //     if placeholder_ml {
+    //         return true;
+    //     }
+    //
+    //     self.preedit.preedit.with_untracked(|preedit| {
+    //         let Some(preedit) = preedit else {
+    //             return false;
+    //         };
+    //
+    //         preedit.text.lines().count() > 1
+    //     })
+    // }
 }
 impl CommonAction for TextDocument {
     fn exec_motion_mode(

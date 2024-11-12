@@ -113,10 +113,6 @@ impl PhantomTextLine {
         tracing::info!("");
     }
 
-    // pub fn update_final_text_len(&mut self, _len: usize) {
-    //     self.final_text_len = _len;
-    //     self.update();
-    // }
     /// 因为折叠的原因，所以重新计算final_col。当前数据只有本行！！！
     fn update(mut self) -> Self {
         let mut offset = 0i32;
@@ -259,96 +255,6 @@ impl PhantomTextLine {
             }
         }
 
-        last
-    }
-
-    /// Translate a column position into the text into what it would be after combining
-    ///
-    /// it only takes `before_cursor` in the params without considering the
-    /// cursor affinity in phantom text
-    pub fn col_after_force(&self, pre_col: usize, before_cursor: bool) -> usize {
-        let mut last = pre_col;
-        for (col_shift, size, (_line, col), _text) in self.offset_size_iter() {
-            // if col_shift < 0 {
-            //     tracing::warn!("offset < 0 {:?}", text);
-            //     // continue;
-            // }
-            // if size < 0 {
-            //     tracing::debug!("size < 0 {:?}", text.kind);
-            //     assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-            //     // continue;
-            // }
-            if pre_col > col || (pre_col == col && before_cursor) {
-                last = pre_col + col_shift + size;
-            }
-        }
-
-        last
-    }
-
-    /// Translate a column position into the text into what it would be after combining
-
-    /// If `before_cursor` is false and the cursor is right at the start then it will stay there
-    ///
-    /// (Think 'is the phantom text before the cursor')
-    ///
-    /// This accepts a `PhantomTextKind` to ignore. Primarily for IME due to it needing to put the
-    /// cursor in the middle.
-    pub fn col_after_ignore(
-        &self,
-        pre_col: usize,
-        before_cursor: bool,
-        skip: impl Fn(&PhantomText) -> bool,
-    ) -> usize {
-        let mut last = pre_col;
-        for (col_shift, size, (_line, col), phantom) in self.offset_size_iter() {
-            if skip(phantom) {
-                continue;
-            }
-
-            if pre_col > col || (pre_col == col && before_cursor) {
-                last = pre_col + col_shift + size;
-            }
-        }
-
-        last
-    }
-
-    /// Translate a column position into the position it would be before combining
-    ///
-    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义在于计算光标的位置（光标是用原始文本的offset来记录位置的）
-    ///
-    /// return (line, index)
-    pub fn before_col(&self, col: usize) -> usize {
-        let mut last = col;
-        let mut _line = self.visual_line - 1;
-        // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
-        for (col_shift, size, (_, hint_col), phantom) in self.offset_size_iter() {
-            if let PhantomTextKind::FoldedRangStart { same_line, end_line, .. } = &phantom.kind {
-                if !same_line {
-                    _line = *end_line;
-                }
-            }
-            // if self.visual_line == 10 {
-            //     tracing::info!("col_shift={col_shift} size={size} hint_col={hint_col} {phantom:?}");
-            // }
-            // if col_shift < 0 {
-            //     col_shift = 0;
-            // }
-            let shifted_start = hint_col + col_shift;
-            let shifted_end = hint_col + col_shift + size;
-
-            if col >= shifted_start {
-                if col >= shifted_end {
-                    last = col - col_shift- size;
-                } else {
-                    last = hint_col;
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
         last
     }
 
@@ -563,7 +469,7 @@ pub struct PhantomTextMultiLine {
     pub lines: Vec<PhantomTextLine>,
 }
 
-impl crate::views::editor::phantom_text::PhantomTextMultiLine {
+impl PhantomTextMultiLine {
     pub fn new(line: PhantomTextLine) -> Self {
         let mut text = line.text.clone();
         text.sort_by(|a, b| {
@@ -573,13 +479,11 @@ impl crate::views::editor::phantom_text::PhantomTextMultiLine {
                 a.col.cmp(&b.col)
             }
         });
-        let mut phantom_line = Self {
+        Self {
             visual_line: line.visual_line,
             origin_text_len: line.origin_text_len, final_text_len: line.final_text_len, text,
             lines: vec![line],
-        };
-        phantom_line.update();
-        phantom_line
+        }
     }
 
     pub fn merge(&mut self, line: PhantomTextLine) {
@@ -607,7 +511,6 @@ impl crate::views::editor::phantom_text::PhantomTextMultiLine {
             self.text.push(phantom);
         }
         self.lines.push(line);
-        self.update();
     }
 
     pub fn final_text_len(&self) -> usize {
@@ -623,41 +526,6 @@ impl crate::views::editor::phantom_text::PhantomTextMultiLine {
 
     pub fn update_final_text_len(&mut self, _len: usize) {
         self.final_text_len = _len;
-        self.update();
-    }
-    fn update(&mut self) {
-        // 是什么？
-        // let mut final_text_len = self.origin_text_len;
-        // let mut is_current_line = true;
-        // for phantom in &mut self.text {
-        //     match phantom.kind {
-        //         PhantomTextKind::CrossLineFoldedRangEnd{ start_character,  same_line, ..} => {
-        //             if same_line {
-        //                 final_text_len -= phantom.col - start_character;
-        //             } else {
-        //                 final_text_len -= phantom.col;
-        //             }
-        //         }
-        //         PhantomTextKind::FoldedRangStart{
-        //             same_line, start_line_len, end_character, ..
-        //         } => {
-        //             if same_line && is_current_line {
-        //                 final_text_len = final_text_len + phantom.text.len()  - (end_character - phantom.col);
-        //             } else if is_current_line {
-        //                 final_text_len = final_text_len + phantom.text.len()  - (start_line_len - phantom.col);
-        //             } else {
-        //                 final_text_len += phantom.text.len();
-        //             }
-        //             if is_current_line && !same_line {
-        //                 is_current_line = false;
-        //             }
-        //         }
-        //         _ => {
-        //             final_text_len += phantom.text.len();
-        //         }
-        //     }
-        // }
-        // self.final_text_len = final_text_len;
     }
     pub fn add_phantom_style(
         &self,

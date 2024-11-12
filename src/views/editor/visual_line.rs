@@ -234,14 +234,7 @@ pub trait TextLayoutProvider {
     /// text
     fn before_phantom_col(&self, line: usize, col: usize) -> usize;
 
-    /// Whether the text has *any* multiline phantom text.
-    ///
-    /// This is used to determine whether we can use the fast route where the lines are linear,
-    /// which also requires no wrapping.
-    ///
-    /// This should be a conservative estimate, so if you aren't bothering to check all of your
-    /// phantom text then just return true.
-    fn has_multiline_phantom(&self) -> bool;
+    // fn has_multiline_phantom(&self) -> bool;
 }
 // impl<T: TextLayoutProvider> TextLayoutProvider for &T {
 //     fn text(&self) -> Rope {
@@ -365,8 +358,8 @@ impl Lines {
     ///      text layout
     /// - `is_linear` could be up to some line, which allows us to make at least the earliest parts
     ///    before any wrapping were faster. However, early lines are faster to calculate anyways.
-    pub fn is_linear(&self, text_prov: &Editor) -> bool {
-        self.wrap.get() == ResolvedWrap::None && !text_prov.has_multiline_phantom()
+    pub fn is_linear(&self) -> bool {
+        self.wrap.get() == ResolvedWrap::None
     }
 
     /// Get the font size that [`Self::font_sizes`] provides
@@ -392,7 +385,7 @@ impl Lines {
             let rope_text = text_prov.rope_text();
             let hard_line_count = rope_text.num_lines();
 
-            let line_count = if self.is_linear(text_prov) {
+            let line_count = if self.is_linear() {
                 hard_line_count
             } else {
                 let mut soft_line_count = 0;
@@ -728,7 +721,7 @@ impl Lines {
 
         let offset = offset.min(text.len());
 
-        if self.is_linear(text_prov) {
+        if self.is_linear() {
             let buffer_line = text.line_of_offset(offset);
             return VLine(buffer_line);
         }
@@ -777,7 +770,7 @@ impl Lines {
 
     /// Get the first visual line of the buffer line.
     pub fn vline_of_line(&self, text_prov: &Editor, line: usize) -> VLine {
-        if self.is_linear(text_prov) {
+        if self.is_linear() {
             return VLine(line);
         }
 
@@ -786,7 +779,7 @@ impl Lines {
 
     /// Find the matching visual line for the given relative visual line.
     pub fn vline_of_rvline(&self, text_prov: &Editor, rvline: RVLine) -> VLine {
-        if self.is_linear(text_prov) {
+        if self.is_linear() {
             debug_assert_eq!(
                 rvline.line_index, 0,
                 "Got a nonzero line index despite being linear, old RVLine was used."
@@ -817,7 +810,7 @@ impl Lines {
 
         let offset = offset.min(text.len());
 
-        if self.is_linear(text_prov) {
+        if self.is_linear() {
             let buffer_line = text.line_of_offset(offset);
             return RVLine::new(buffer_line, 0);
         }
@@ -885,7 +878,7 @@ impl Lines {
 
     /// Get the relative visual line of the buffer line
     pub fn rvline_of_line(&self, text_prov: &Editor, line: usize) -> RVLine {
-        if self.is_linear(text_prov) {
+        if self.is_linear() {
             return RVLine::new(line, 0);
         }
 
@@ -1253,7 +1246,7 @@ fn find_vline_init_info(
         return Some((0, RVLine::new(0, 0)));
     }
 
-    if lines.is_linear(text_prov) {
+    if lines.is_linear() {
         // If lines is linear then we can trivially convert the visual line to a buffer line
         let line = vline.get();
         if line > rope_text.last_line() {
@@ -1701,7 +1694,7 @@ impl VisualLinesRelative {
         let font_size = lines.font_size(start.line);
         let offset = rvline_offset(&layouts, &text_prov, font_size, start);
 
-        let linear = lines.is_linear(&text_prov);
+        let linear = lines.is_linear();
 
         VisualLinesRelative {
             font_sizes: lines.font_sizes.borrow().clone(),

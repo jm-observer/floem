@@ -1170,7 +1170,7 @@ impl Editor {
     fn new_whitespace_layout(
         line_content: &str,
         text_layout: &TextLayout,
-        phantom: &PhantomTextLine,
+        phantom: &PhantomTextMultiLine,
         render_whitespace: RenderWhitespace,
     ) -> Option<Vec<(char, (f64, f64))>> {
         let mut render_leading = false;
@@ -1407,10 +1407,10 @@ impl TextLayoutProvider for Editor {
             .before_phantom_col(self.id(), &self.es.get_untracked(), line, col)
     }
 
-    fn has_multiline_phantom(&self) -> bool {
-        self.doc()
-            .has_multiline_phantom(self.id(), &self.es.get_untracked())
-    }
+    // fn has_multiline_phantom(&self) -> bool {
+    //     self.doc()
+    //         .has_multiline_phantom(self.id(), &self.es.get_untracked())
+    // }
 }
 
 struct EditorFontSizes {

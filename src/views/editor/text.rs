@@ -207,6 +207,11 @@ impl_downcast!(Document);
 pub trait DocumentPhantom {
     fn phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextLine;
 
+    fn multi_phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextMultiLine {
+        crate::views::editor::phantom_text::PhantomTextMultiLine::new(self.phantom_text(edid, styling, line))
+    }
+
+
     /// Translate a column position into the position it would be before combining with
     /// the phantom text.
     ///
@@ -218,13 +223,13 @@ pub trait DocumentPhantom {
         line: usize,
         col: usize,
     ) -> usize {
-        let phantom = self.phantom_text(edid, styling, line);
+        let phantom = self.multi_phantom_text(edid, styling, line);
         phantom.before_col(col)
     }
 
-    fn has_multiline_phantom(&self, _edid: EditorId, _styling: &EditorStyle) -> bool {
-        true
-    }
+    // fn has_multiline_phantom(&self, _edid: EditorId, _styling: &EditorStyle) -> bool {
+    //     true
+    // }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -526,9 +531,9 @@ where
         self.doc.phantom_text(edid, styling, line)
     }
 
-    fn has_multiline_phantom(&self, edid: EditorId, styling: &EditorStyle) -> bool {
-        self.doc.has_multiline_phantom(edid, styling)
-    }
+    // fn has_multiline_phantom(&self, edid: EditorId, styling: &EditorStyle) -> bool {
+    //     self.doc.has_multiline_phantom(edid, styling)
+    // }
 
     fn before_phantom_col(
         &self,
