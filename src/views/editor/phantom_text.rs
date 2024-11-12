@@ -225,38 +225,38 @@ impl PhantomTextLine {
         }
     }
 
-    /// Translate a column position into the text into what it would be after combining
-    ///
-    /// 将列位置转换为合并后的文本位置
-    ///
-    /// If `before_cursor` is false and the cursor is right at the start then it will stay there
-    /// (Think 'is the phantom text before the cursor')
-    pub fn col_after(&self, pre_col: usize, before_cursor: bool) -> usize {
-        let mut last = pre_col;
-        for (col_shift, size, (_line, col), text) in self.offset_size_iter() {
-            // if col_shift < 0 {
-            //     tracing::warn!("offset < 0 {:?}", text);
-            //     // continue;
-            // }
-            // if size < 0 {
-            //     // tracing::debug!("size < 0 {:?}", text.kind);
-            //     assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
-            //     // continue;
-            // }
-
-            let before_cursor = match text.affinity {
-                Some(CursorAffinity::Forward) => true,
-                Some(CursorAffinity::Backward) => false,
-                None => before_cursor,
-            };
-
-            if pre_col > col || (pre_col == col && before_cursor) {
-                last = pre_col + col_shift + size;
-            }
-        }
-
-        last
-    }
+    // /// Translate a column position into the text into what it would be after combining
+    // ///
+    // /// 将列位置转换为合并后的文本位置
+    // ///
+    // /// If `before_cursor` is false and the cursor is right at the start then it will stay there
+    // /// (Think 'is the phantom text before the cursor')
+    // pub fn col_after(&self, pre_col: usize, before_cursor: bool) -> usize {
+    //     let mut last = pre_col;
+    //     for (col_shift, size, (_line, col), text) in self.offset_size_iter() {
+    //         // if col_shift < 0 {
+    //         //     tracing::warn!("offset < 0 {:?}", text);
+    //         //     // continue;
+    //         // }
+    //         // if size < 0 {
+    //         //     // tracing::debug!("size < 0 {:?}", text.kind);
+    //         //     assert_eq!(text.kind, PhantomTextKind::CrossLineFoldedRangEnd);
+    //         //     // continue;
+    //         // }
+    //
+    //         let before_cursor = match text.affinity {
+    //             Some(CursorAffinity::Forward) => true,
+    //             Some(CursorAffinity::Backward) => false,
+    //             None => before_cursor,
+    //         };
+    //
+    //         if pre_col > col || (pre_col == col && before_cursor) {
+    //             last = pre_col + col_shift + size;
+    //         }
+    //     }
+    //
+    //     last
+    // }
 
     /// Translate a column position into the position it would be before combining
     ///
@@ -350,67 +350,67 @@ impl PhantomTextLine {
         (text, None)
     }
 
-    /// Iterator over (col_shift, size, hint, pre_column)
-    /// Note that this only iterates over the ordered text, since those depend on the text for where
-    /// they'll be positioned
-    /// (finally col index, phantom len, phantom at origin text index, phantom)
-    ///
-    /// (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，(幽灵文本在原始文本的字符位置), (幽灵文本在最终文本的字符位置)，幽灵文本)
-    ///
-    /// 所以原始文本在最终文本的位置= 原始位置 + 之前的幽灵文本总长度
-    ///
-    pub fn offset_size_iter(&self) -> impl Iterator<Item = (usize, usize, (usize, usize), &PhantomText)> + '_ {
-        let mut col_shift = 0usize;
-        let mut line = self.visual_line - 1;
-        self.text.iter().map(move |phantom| {
-            let rs = match phantom.kind {
-                PhantomTextKind::FoldedRangStart {
-                    same_line,
-                    end_line, end_character, ..
-                } => {
-                    let pre_col_shift = col_shift;
-                    let phantom_line = line;
-                    if same_line {
-                        col_shift = col_shift + phantom.text.len()
-                            - (end_character - phantom.col) ;
-                    } else {
-                        line = end_line;
-                        col_shift += phantom.text.len();
-                    }
-                    (
-                        pre_col_shift,
-                        phantom.text.len(),
-                        (phantom_line, phantom.col),
-                        phantom,
-                    )
-                }
-                PhantomTextKind::CrossLineFoldedRangEnd {..} => {
-                    // col_shift -= phantom.col;
-                    (0, 0, (line, phantom.col), phantom)
-                }
-                _ => {
-                    let pre_col_shift = col_shift;
-                    col_shift += phantom.text.len();
-                    (
-                        pre_col_shift,
-                        phantom.text.len(),
-                        (line, phantom.col),
-                        phantom,
-                    )
-                }
-            };
-            tracing::debug!(
-                "visual_line={} offset={} len={} col={:?} text={} {:?}",
-                self.visual_line,
-                rs.0,
-                rs.1,
-                rs.2,
-                rs.3.text,
-                rs.3.kind
-            );
-            rs
-        })
-    }
+    // /// Iterator over (col_shift, size, hint, pre_column)
+    // /// Note that this only iterates over the ordered text, since those depend on the text for where
+    // /// they'll be positioned
+    // /// (finally col index, phantom len, phantom at origin text index, phantom)
+    // ///
+    // /// (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，(幽灵文本在原始文本的字符位置), (幽灵文本在最终文本的字符位置)，幽灵文本)
+    // ///
+    // /// 所以原始文本在最终文本的位置= 原始位置 + 之前的幽灵文本总长度
+    // ///
+    // pub fn offset_size_iter(&self) -> impl Iterator<Item = (usize, usize, (usize, usize), &PhantomText)> + '_ {
+    //     let mut col_shift = 0usize;
+    //     let mut line = self.visual_line - 1;
+    //     self.text.iter().map(move |phantom| {
+    //         let rs = match phantom.kind {
+    //             PhantomTextKind::FoldedRangStart {
+    //                 same_line,
+    //                 end_line, end_character, ..
+    //             } => {
+    //                 let pre_col_shift = col_shift;
+    //                 let phantom_line = line;
+    //                 if same_line {
+    //                     col_shift = col_shift + phantom.text.len()
+    //                         - (end_character - phantom.col) ;
+    //                 } else {
+    //                     line = end_line;
+    //                     col_shift += phantom.text.len();
+    //                 }
+    //                 (
+    //                     pre_col_shift,
+    //                     phantom.text.len(),
+    //                     (phantom_line, phantom.col),
+    //                     phantom,
+    //                 )
+    //             }
+    //             PhantomTextKind::CrossLineFoldedRangEnd {..} => {
+    //                 // col_shift -= phantom.col;
+    //                 (0, 0, (line, phantom.col), phantom)
+    //             }
+    //             _ => {
+    //                 let pre_col_shift = col_shift;
+    //                 col_shift += phantom.text.len();
+    //                 (
+    //                     pre_col_shift,
+    //                     phantom.text.len(),
+    //                     (line, phantom.col),
+    //                     phantom,
+    //                 )
+    //             }
+    //         };
+    //         tracing::debug!(
+    //             "visual_line={} offset={} len={} col={:?} text={} {:?}",
+    //             self.visual_line,
+    //             rs.0,
+    //             rs.1,
+    //             rs.2,
+    //             rs.3.text,
+    //             rs.3.kind
+    //         );
+    //         rs
+    //     })
+    // }
 
     /// (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，(幽灵文本在原始文本的字符位置), (幽灵文本在最终文本的字符位置)，幽灵文本)
     ///
@@ -438,22 +438,22 @@ impl PhantomTextLine {
         })
     }
 
-    pub fn apply_attr_styles(&self, default: Attrs, attrs_list: &mut AttrsList) {
-        for (offset, size, (_line, col), phantom) in self.offset_size_iter() {
-            let start = col + offset;
-            let end = start + size;
-
-            let mut attrs = default;
-            if let Some(fg) = phantom.fg {
-                attrs = attrs.color(fg);
-            }
-            if let Some(phantom_font_size) = phantom.font_size {
-                attrs = attrs.font_size((phantom_font_size as f32).min(attrs.font_size));
-            }
-
-            attrs_list.add_span(start..end, attrs);
-        }
-    }
+    // pub fn apply_attr_styles(&self, default: Attrs, attrs_list: &mut AttrsList) {
+    //     for (offset, size, (_line, col), phantom) in self.offset_size_iter() {
+    //         let start = col + offset;
+    //         let end = start + size;
+    //
+    //         let mut attrs = default;
+    //         if let Some(fg) = phantom.fg {
+    //             attrs = attrs.color(fg);
+    //         }
+    //         if let Some(phantom_font_size) = phantom.font_size {
+    //             attrs = attrs.font_size((phantom_font_size as f32).min(attrs.font_size));
+    //         }
+    //
+    //         attrs_list.add_span(start..end, attrs);
+    //     }
+    // }
 }
 
 
@@ -487,9 +487,9 @@ impl PhantomTextMultiLine {
     }
 
     pub fn merge(&mut self, line: PhantomTextLine) {
-        self.log("merge");
+        // self.log("merge");
         // tracing::info!("merge visual_line={} origin_text_len={} final_text_len={}", self.visual_line, self.origin_text_len, self.final_text_len);
-        line.log();
+        // line.log();
         let origin_text_len = self.origin_text_len;
         self.origin_text_len += line.origin_text_len;
         let final_text_len = self.final_text_len;
@@ -533,10 +533,8 @@ impl PhantomTextMultiLine {
         attrs: Attrs,
         font_size: usize,
         phantom_color: Color,
-        collapsed_line_col: usize,
     ) {
-        // Apply phantom text specific styling
-        for (_offset, size, _, (_line, final_col), phantom) in self.offset_size_iter_2() {
+        for phantom in &self.text {
             if phantom.text.is_empty() {
                 continue
             }
@@ -549,12 +547,8 @@ impl PhantomTextMultiLine {
             if let Some(phantom_font_size) = phantom.font_size {
                 attrs = attrs.font_size(phantom_font_size.min(font_size) as f32);
             }
-
-            let start = final_col + collapsed_line_col;
-            let end = final_col + size + collapsed_line_col;
-            // tracing::info!("{} {start}-{end} final_col={final_col} collapsed_line_col={collapsed_line_col} {}", self.visual_line, phantom.text);
             attrs_list.add_span(
-                start..end,
+                phantom.final_col..(phantom.final_col + phantom.text.len()),
                 attrs,
             );
         }
@@ -585,28 +579,18 @@ impl PhantomTextMultiLine {
     ///
     /// todo remove Option
     pub fn col_at(&self, pre_col: usize) -> Option<usize> {
-        // if self.visual_line == 11 {
-        //     tracing::info!("11");
-        // }
-        let mut last_offset = 0;
-        for (_col_shift, _size, (_line, col), (__final_line, final_col), _phantom) in self.offset_size_iter_2() {
-            // if self.visual_line == 11 {
-            //     tracing::info!("{pre_col} {col_shift} {size} {_line} {col} {line} {final_col} {:?}", _phantom);
-            // }
-            if pre_col <= col {
-                break;
+        if pre_col >= self.origin_text_len {
+            return None;
+        }
+        for text in &self.text {
+            let col_end = text.col + text.text.len();
+            if pre_col < text.col {
+                return Some(text.final_col - (text.col - pre_col));
+            } else if pre_col >= text.col && pre_col < col_end {
+                return None
             }
-            last_offset = final_col as i32 - col as i32;
         }
-        // if self.visual_line == 11 {
-        //     tracing::info!("\n");
-        // }
-        let final_pre_col = pre_col as i32 + last_offset;
-        if final_pre_col < 0 {
-            None
-        } else {
-            Some(final_pre_col as usize)
-        }
+        Some(self.final_text_len - (self.origin_text_len - pre_col))
     }
 
     /// Translate a column position into the text into what it would be after combining
@@ -1121,20 +1105,56 @@ mod test {
     }
 
 
-    fn print_lines(lines: &PhantomTextMultiLine) {
-        println!("visual_line={} origin_text_len={} final_text_len={}", lines.visual_line, lines.origin_text_len, lines.final_text_len);
-        for text in &lines.text {
-            println!("{:?} line={} col={} final_col={} text={} text.len()={}", text.kind, text.line, text.col, text.final_col, text.text, text.text.len());
+    #[test]
+    fn check_col_at() {
+        // "0123456789012345678901234567890123456789
+        // "    if true {nr    } else {nr    }nr"
+        // "    if true {...} else {...}nr"
+        // "0123456789012345678901234567890123456789
+        let line = get_merged_data();
+        let orgin_text: Vec<char> = "    if true {nr    } else {nr    }nr".chars().into_iter().collect();
+        {
+            let index = 35;
+            assert_eq!(orgin_text[index], 'r');
+            assert_eq!(line.col_at(index), Some(29));
         }
-        println!();
+        {
+            let index = 26;
+            assert_eq!(orgin_text[index], '{');
+            assert_eq!(line.col_at(index), None);
+        }
+        {
+            let index = 22;
+            assert_eq!(orgin_text[index], 'l');
+            assert_eq!(line.col_at(index), Some(19));
+        }
+        {
+            assert_eq!(orgin_text[9], 'u');
+            assert_eq!(line.col_at(9), Some(9));
+        }
+        {
+            let index = 12;
+            assert_eq!(orgin_text[index], '{');
+            assert_eq!(line.col_at(index), None);
+        }
+        {
+            let index = 19;
+            assert_eq!(orgin_text[index], '}');
+            assert_eq!(line.col_at(index), None);
+        }
     }
 
-    fn print_line(lines: &PhantomTextLine) {
-        println!("visual_line={} origin_text_len={} final_text_len={}", lines.visual_line, lines.origin_text_len, lines.final_text_len);
-        for text in &lines.text {
-            println!("{:?} line={} col={} final_col={} text={} text.len()={}", text.kind, text.line, text.col, text.final_col, text.text, text.text.len());
-        }
-        println!();
+    /*
+     2 |    if a.0 {...} else {...}
+     */
+    fn get_merged_data() -> PhantomTextMultiLine {
+        let line2 = init_folded_line(2, false);
+        let line_folded_4 = init_folded_line(4, true);
+        let line6 = init_folded_line(6, false);
+        let mut lines = PhantomTextMultiLine::new(line2);
+        lines.merge(line_folded_4);
+        lines.merge(line6);
+        lines
     }
 
     fn check_lines_col(lines: &SmallVec<[PhantomText; 6]>, origin_text_len: usize, final_text_len: usize, origin: &str, expect: &str) {
@@ -1161,30 +1181,6 @@ mod test {
         assert_eq!(final_text_len, expect.len());
     }
 
-    // fn check_line_col(lines: &PhantomTextLine, origin: &str, expect: &str) {
-    //     check_lines_col(&lines.text, lines.origin_text_len, lines.final_text_len, origin, expect);
-        // println!("visual_line={} origin_text_len={}", lines.visual_line, lines.origin_text_len);
-        // let mut rs = String::new();
-        // let mut latest_col = 0;
-        // for text in &lines.text {
-        //     if let PhantomTextKind::FoldedRangStart { same_line, start_line_len, .. } = text.kind {
-        //         rs.push_str(sub_str(origin, latest_col, text.col));
-        //         rs.push_str(text.text.as_str());
-        //         if same_line {
-        //             latest_col = text.col;
-        //         } else {
-        //             latest_col = start_line_len;
-        //         }
-        //     } else if let PhantomTextKind::CrossLineFoldedRangEnd { .. } = text.kind {
-        //         latest_col = text.col;
-        //     } else {
-        //         rs.push_str(text.text.as_str());
-        //         latest_col = text.col;
-        //     }
-        // }
-        // rs.push_str(sub_str(origin, latest_col, lines.origin_text_len));
-        // assert_eq!(expect, rs.as_str());
-    // }
     fn check_line_final_col(lines: &PhantomTextLine, rs: &str) {
         for text in &lines.text {
             assert_eq!(text.text.as_str(), sub_str(rs, text.final_col, text.final_col + text.text.len()));
@@ -1199,5 +1195,19 @@ mod test {
         }
     }
 
+    fn print_lines(lines: &PhantomTextMultiLine) {
+        println!("visual_line={} origin_text_len={} final_text_len={}", lines.visual_line, lines.origin_text_len, lines.final_text_len);
+        for text in &lines.text {
+            println!("{:?} line={} col={} final_col={} text={} text.len()={}", text.kind, text.line, text.col, text.final_col, text.text, text.text.len());
+        }
+        println!();
+    }
 
+    fn print_line(lines: &PhantomTextLine) {
+        println!("visual_line={} origin_text_len={} final_text_len={}", lines.visual_line, lines.origin_text_len, lines.final_text_len);
+        for text in &lines.text {
+            println!("{:?} line={} col={} final_col={} text={} text.len()={}", text.kind, text.line, text.col, text.final_col, text.text, text.text.len());
+        }
+        println!();
+    }
 }

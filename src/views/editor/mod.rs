@@ -515,7 +515,6 @@ impl Editor {
     pub fn single_click(&self, pointer_event: &PointerInputEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
         let (new_offset, _) = self.offset_of_point(mode, pointer_event.pos, true);
-        tracing::info!("new_offset={new_offset}");
         self.cursor.update(|cursor| {
             cursor.set_offset(
                 new_offset,
@@ -1305,10 +1304,10 @@ impl TextLayoutProvider for Editor {
             = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0);
 
         let mut phantom_text = PhantomTextMultiLine::new(phantom_text);
-        if line == 1 {
-            tracing::info!("{line_content:?} {}", line_content.len());
-            phantom_text.log("start");
-        }
+        // if line == 1 {
+        //     tracing::info!("{line_content:?} {}", line_content.len());
+        //     phantom_text.log("start");
+        // }
         let mut line_content = line_content.to_string();
         while let Some((collapsed_line, ..)) = collapsed_line_col.take() {
             let line_content_original = text.line_content(collapsed_line);
@@ -1319,18 +1318,18 @@ impl TextLayoutProvider for Editor {
             collapsed_line_col = next_collapsed_line_col;
 
             line_content.push_str(&collapsed_line_content);
-            if line == 1 {
-                tracing::info!("collapsed_line_content={collapsed_line_content:?} {}", collapsed_line_content.len());
-                tracing::info!("line_content={line_content:?} {}", line_content.len());
-            }
+            // if line == 1 {
+            //     tracing::info!("collapsed_line_content={collapsed_line_content:?} {}", collapsed_line_content.len());
+            //     tracing::info!("line_content={line_content:?} {}", line_content.len());
+            // }
             for (rangs, attrs) in collapsed_attrs_list.spans() {
                 attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
             }
             phantom_text.merge(next_phantom_text);
         }
-        if line == 1 {
-            phantom_text.log("end");
-        }
+        // if line == 1 {
+        //     phantom_text.log("end");
+        // }
         phantom_text.update_final_text_len(line_content.len());
         // if line == 8 {
         //     phantom_text.log("new_text_layout");
