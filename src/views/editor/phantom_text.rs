@@ -57,19 +57,23 @@ pub enum PhantomTextKind {
     InlayHint,
     /// Error lens
     Diagnostic,
-    /// 折叠的起始位置。折叠是否跨行、结束位置的行、列位置
-    FoldedRangStart {
-        same_line: bool,
-        start_line_len: usize,
-        end_line: usize,
-        end_character: usize,
+    // 行内折叠。跨行折叠也都转换成行内折叠
+    LineFoldedRang {
+        next_line: Option<usize>,
+        len: usize,
     },
-    /// 折叠的结束位置。结束位置的行
-    CrossLineFoldedRangEnd {
-        same_line: bool,
-        end_line: usize,
-        start_character: usize,
-    },
+    // 折叠的起始位置。折叠是否跨行、结束位置的行、列位置
+    // CrossLineFoldedRangStart {
+    //     // 用于是否衔接下一行
+    //     end_line: usize,
+    //     // 行末字符
+    //     end_character: usize,
+    // },
+    // 折叠的结束位置。结束位置的行
+    // CrossLineFoldedRangEnd {
+    //     end_line: usize,
+    //     start_character: usize,
+    // },
 }
 
 /// Information about the phantom text on a specific line.  
@@ -118,21 +122,19 @@ impl PhantomTextLine {
         let mut offset = 0i32;
         for phantom in &mut self.text {
             match phantom.kind {
-                PhantomTextKind::CrossLineFoldedRangEnd{ same_line, start_character,.. } => {
-                    if same_line {
-                        offset -= (phantom.col - start_character) as i32;
-                    } else {
-                        offset -= phantom.col as i32;
-                    }
+                PhantomTextKind::LineFoldedRang{ len, .. } => {
                     phantom.final_col = usize_offset(phantom.col, offset);
+                    offset = offset + phantom.text.len() as i32 - len as i32;
                 }
-                PhantomTextKind::FoldedRangStart{ same_line, start_line_len, .. } => {
-                    phantom.final_col = usize_offset(phantom.col, offset);
-                    if !same_line {
-                        offset -= (start_line_len - phantom.col) as i32;
-                    }
-                    offset += phantom.text.len() as i32;
-                }
+                // PhantomTextKind::CrossLineFoldedRangEnd{ .. } => {
+                //         offset -= phantom.col as i32;
+                //     phantom.final_col = usize_offset(phantom.col, offset);
+                // }
+                // PhantomTextKind::CrossLineFoldedRangStart { end_character, .. } => {
+                //     phantom.final_col = usize_offset(phantom.col, offset);
+                //         offset -= (end_character - phantom.col) as i32;
+                //     offset += phantom.text.len() as i32;
+                // }
                 _ => {
                     phantom.final_col = usize_offset(phantom.col, offset);
                     offset += phantom.text.len() as i32;
@@ -194,36 +196,36 @@ impl PhantomTextLine {
     //     ranges
     // }
 
-    /// Translate a column position into the text into what it would be after combining
-    /// 求原始文本在最终文本的位置。场景：计算原始文本的样式在最终文本的位置。
-    ///
-    /// 最终文本的位置 = 原始文本位置 + 之前的幽灵文本长度
-    ///
-    /// todo remove Option
-    pub fn col_at(&self, pre_col: usize) -> Option<usize> {
-        // if self.visual_line == 11 {
-        //     tracing::info!("11");
-        // }
-        let mut last_offset = 0;
-        for (_col_shift, _size, (_line, col), (__final_line, final_col), _phantom) in self.offset_size_iter_2() {
-            // if self.visual_line == 11 {
-            //     tracing::info!("{pre_col} {col_shift} {size} {_line} {col} {line} {final_col} {:?}", _phantom);
-            // }
-            if pre_col <= col {
-                break;
-            }
-            last_offset = final_col as i32 - col as i32;
-        }
-        // if self.visual_line == 11 {
-        //     tracing::info!("\n");
-        // }
-        let final_pre_col = pre_col as i32 + last_offset;
-        if final_pre_col < 0 {
-            None
-        } else {
-            Some(final_pre_col as usize)
-        }
-    }
+    // /// Translate a column position into the text into what it would be after combining
+    // /// 求原始文本在最终文本的位置。场景：计算原始文本的样式在最终文本的位置。
+    // ///
+    // /// 最终文本的位置 = 原始文本位置 + 之前的幽灵文本长度
+    // ///
+    // /// todo remove Option
+    // pub fn col_at(&self, pre_col: usize) -> Option<usize> {
+    //     // if self.visual_line == 11 {
+    //     //     tracing::info!("11");
+    //     // }
+    //     let mut last_offset = 0;
+    //     for (_col_shift, _size, (_line, col), (__final_line, final_col), _phantom) in self.offset_size_iter_2() {
+    //         // if self.visual_line == 11 {
+    //         //     tracing::info!("{pre_col} {col_shift} {size} {_line} {col} {line} {final_col} {:?}", _phantom);
+    //         // }
+    //         if pre_col <= col {
+    //             break;
+    //         }
+    //         last_offset = final_col as i32 - col as i32;
+    //     }
+    //     // if self.visual_line == 11 {
+    //     //     tracing::info!("\n");
+    //     // }
+    //     let final_pre_col = pre_col as i32 + last_offset;
+    //     if final_pre_col < 0 {
+    //         None
+    //     } else {
+    //         Some(final_pre_col as usize)
+    //     }
+    // }
 
     // /// Translate a column position into the text into what it would be after combining
     // ///
@@ -298,9 +300,10 @@ impl PhantomTextLine {
 
     /// Insert the hints at their positions in the text
     /// Option<(collapsed line, collapsed col index)>
-    pub fn combine_with_text<'a>(&self, text: &'a str) -> (Cow<'a, str>, Option<(usize, usize)>) {
+    pub fn combine_with_text<'a>(&self, text: &'a str) -> (Cow<'a, str>, Option<usize>) {
         let mut text = Cow::Borrowed(text);
         let mut col_shift: i32 = 0;
+        let mut next_line_info = None;
 
         for phantom in self.text.iter() {
             let location = phantom.col as i32 + col_shift;
@@ -316,29 +319,18 @@ impl PhantomTextLine {
 
             let mut text_o = text.into_owned();
 
-            if let PhantomTextKind::FoldedRangStart {
-                same_line,
-                end_character,
-                end_line, ..
+            if let PhantomTextKind::LineFoldedRang {
+                next_line, len,
             } = phantom.kind
             {
-                if same_line {
+                next_line_info = next_line;
                     let mut new_text_o = text_o.subseq(Interval::new(0, location));
                     new_text_o.push_str(&phantom.text);
-                    new_text_o.push_str(
-                        &text_o.subseq(Interval::new(end_character, text_o.len())),
-                    );
+                    // new_text_o.push_str(
+                    //     &text_o.subseq(Interval::new(end_character, text_o.len())),
+                    // );
                     col_shift = col_shift + phantom.text.len() as i32
-                        - (end_character - location) as i32;
-                } else {
-                    text_o = text_o.subseq(Interval::new(0, location));
-                    text_o.push_str(&phantom.text);
-                    text = Cow::Owned(text_o);
-                    return (text, Some((end_line, end_character)));
-                }
-            } else if let PhantomTextKind::CrossLineFoldedRangEnd{..} = phantom.kind {
-                text_o = text_o.subseq(Interval::new(location, text_o.len()));
-                col_shift -= location as i32;
+                        - len as i32;
             } else {
                 text_o.insert_str(location, &phantom.text);
                 col_shift += phantom.text.len() as i32;
@@ -347,7 +339,7 @@ impl PhantomTextLine {
             text = Cow::Owned(text_o);
         }
 
-        (text, None)
+        (text, next_line_info)
     }
 
     // /// Iterator over (col_shift, size, hint, pre_column)
@@ -421,7 +413,7 @@ impl PhantomTextLine {
         let line = self.visual_line - 1;
         self.text.iter().map(move |phantom| {
             match phantom.kind {
-                PhantomTextKind::CrossLineFoldedRangEnd{..} => {
+                PhantomTextKind::LineFoldedRang{..} => {
                     (before_phantom_len, 0, (phantom.line, phantom.col), (line, phantom.final_col), phantom)
                 }
                 _ => {
@@ -495,17 +487,9 @@ impl PhantomTextMultiLine {
         let final_text_len = self.final_text_len;
         self.final_text_len += line.final_text_len;
         for mut phantom in line.text.clone() {
-            // if let PhantomTextKind::CrossLineFoldedRangEnd { same_line, start_character,.. } = &phantom.kind {
-            //     let offset = if *same_line {
-            //         phantom.col - *start_character
-            //     } else {
-            //         phantom.col
-            //     };
-            //     phantom.final_col += final_text_len - offset;
+            // if let PhantomTextKind::CrossLineFoldedRangStart { end_character, .. } = &mut phantom.kind {
+            //     *end_character += origin_text_len;
             // }
-            if let PhantomTextKind::FoldedRangStart { start_line_len, .. } = &mut phantom.kind {
-                *start_line_len += origin_text_len;
-            }
             phantom.col += origin_text_len;
             phantom.final_col += final_text_len;
             self.text.push(phantom);
@@ -559,14 +543,8 @@ impl PhantomTextMultiLine {
     pub fn floded_ranges(&self) -> Vec<Range<usize>> {
         let mut ranges = Vec::new();
         for item in &self.text {
-            if let PhantomTextKind::FoldedRangStart { same_line, end_character, .. } = item.kind {
-                if same_line {
+            if let PhantomTextKind::LineFoldedRang { .. } = item.kind {
                     ranges.push(item.final_col..self.final_text_len);
-                } else {
-                    ranges.push(item.final_col..end_character);
-                }
-            } else if let PhantomTextKind::CrossLineFoldedRangEnd{..} = item.kind {
-                ranges.push(0..item.final_col);
             }
         }
         ranges
@@ -582,11 +560,22 @@ impl PhantomTextMultiLine {
         if pre_col >= self.origin_text_len {
             return None;
         }
+        // "0123456789012345678901234567890123456789
+        // "    if true {nr    } else {nr    }nr"
+        // "    if true {...} else {...}nr"
+        // "0123456789012345678901234567890123456789
+        //              s    e     s    e
         for text in &self.text {
-            let col_end = text.col + text.text.len();
-            if pre_col < text.col {
+            let (col_start, col_end)  = if let PhantomTextKind::LineFoldedRang {
+                len, ..
+            } = &text.kind {
+                (text.col, text.col + *len)
+            } else {
+                (text.col, text.col + text.text.len())
+            };
+            if pre_col < col_start {
                 return Some(text.final_col - (text.col - pre_col));
-            } else if pre_col >= text.col && pre_col < col_end {
+            } else if pre_col >= col_start && pre_col < col_end {
                 return None
             }
         }
@@ -687,12 +676,10 @@ impl PhantomTextMultiLine {
         let mut last = col;
         let mut _line = self.visual_line - 1;
         // (最终文本上该幽灵文本前其他幽灵文本的总长度，幽灵文本的长度，幽灵文本在原始文本的字符位置，幽灵文本)
-        for (col_shift, size, (_, hint_col), phantom) in self.offset_size_iter() {
-            if let PhantomTextKind::FoldedRangStart { same_line, end_line, .. } = &phantom.kind {
-                if !same_line {
-                    _line = *end_line;
-                }
-            }
+        for (col_shift, size, (_, hint_col), _phantom) in self.offset_size_iter() {
+            // if let PhantomTextKind::CrossLineFoldedRangStart { end_line, .. } = &phantom.kind {
+            //         _line = *end_line;
+            // }
             // if self.visual_line == 10 {
             //     tracing::info!("col_shift={col_shift} size={size} hint_col={hint_col} {phantom:?}");
             // }
@@ -754,59 +741,47 @@ impl PhantomTextMultiLine {
         (last_line, col - last_final_col + last_origin_col)
     }
 
-    /// Insert the hints at their positions in the text
-    /// Option<(collapsed line, collapsed col index)>
-    pub fn combine_with_text<'a>(&self, text: &'a str) -> (Cow<'a, str>, Option<(usize, usize)>) {
-        let mut text = Cow::Borrowed(text);
-        let mut col_shift: i32 = 0;
-
-        for phantom in self.text.iter() {
-            let location = phantom.col as i32 + col_shift;
-            if location < 0 {
-                tracing::error!("{:?} {}", phantom.kind, phantom.text);
-                continue;
-            }
-            let location = location as usize;
-            // Stop iterating if the location is bad
-            if text.get(location..).is_none() {
-                return (text, None);
-            }
-
-            let mut text_o = text.into_owned();
-
-            if let PhantomTextKind::FoldedRangStart {
-                same_line,
-                end_character,
-                end_line, ..
-            } = phantom.kind
-            {
-                if same_line {
-                    let mut new_text_o = text_o.subseq(Interval::new(0, location));
-                    new_text_o.push_str(&phantom.text);
-                    new_text_o.push_str(
-                        &text_o.subseq(Interval::new(end_character, text_o.len())),
-                    );
-                    col_shift = col_shift + phantom.text.len() as i32
-                        - (end_character - location) as i32;
-                } else {
-                    text_o = text_o.subseq(Interval::new(0, location));
-                    text_o.push_str(&phantom.text);
-                    text = Cow::Owned(text_o);
-                    return (text, Some((end_line, end_character)));
-                }
-            } else if let PhantomTextKind::CrossLineFoldedRangEnd{..} = phantom.kind {
-                text_o = text_o.subseq(Interval::new(location, text_o.len()));
-                col_shift -= location as i32;
-            } else {
-                text_o.insert_str(location, &phantom.text);
-                col_shift += phantom.text.len() as i32;
-            }
-
-            text = Cow::Owned(text_o);
-        }
-
-        (text, None)
-    }
+    // /// Insert the hints at their positions in the text
+    // /// Option<(collapsed line, collapsed col index)>
+    // pub fn combine_with_text<'a>(&self, text: &'a str) -> (Cow<'a, str>, Option<(usize, usize)>) {
+    //     let mut text = Cow::Borrowed(text);
+    //     let mut col_shift: i32 = 0;
+    //
+    //     for phantom in self.text.iter() {
+    //         let location = phantom.col as i32 + col_shift;
+    //         if location < 0 {
+    //             tracing::error!("{:?} {}", phantom.kind, phantom.text);
+    //             continue;
+    //         }
+    //         let location = location as usize;
+    //         // Stop iterating if the location is bad
+    //         if text.get(location..).is_none() {
+    //             return (text, None);
+    //         }
+    //
+    //         let mut text_o = text.into_owned();
+    //
+    //         if let PhantomTextKind::LineFoldedRang {
+    //             len, ..
+    //         } = phantom.kind
+    //         {
+    //                 let mut new_text_o = text_o.subseq(Interval::new(0, location));
+    //                 new_text_o.push_str(&phantom.text);
+    //                 // new_text_o.push_str(
+    //                 //     &text_o.subseq(Interval::new(end_character, text_o.len())),
+    //                 // );
+    //                 col_shift = col_shift + phantom.text.len() as i32
+    //                     - len as i32;
+    //         } else {
+    //             text_o.insert_str(location, &phantom.text);
+    //             col_shift += phantom.text.len() as i32;
+    //         }
+    //
+    //         text = Cow::Owned(text_o);
+    //     }
+    //
+    //     (text, None)
+    // }
 
     /// Iterator over (col_shift, size, hint, pre_column)
     /// Note that this only iterates over the ordered text, since those depend on the text for where
@@ -818,23 +793,16 @@ impl PhantomTextMultiLine {
     /// 所以原始文本在最终文本的位置= 原始位置 + 之前的幽灵文本总长度
     ///
     pub fn offset_size_iter(&self) -> impl Iterator<Item = (usize, usize, (usize, usize), &PhantomText)> + '_ {
-        let mut col_shift = 0usize;
-        let mut line = self.visual_line - 1;
+        let mut col_shift = 10usize;
+        let line = self.visual_line - 1;
         self.text.iter().map(move |phantom| {
             let rs = match phantom.kind {
-                PhantomTextKind::FoldedRangStart {
-                    same_line,
-                    end_line, end_character, ..
+                PhantomTextKind::LineFoldedRang {
+                    ..
                 } => {
                     let pre_col_shift = col_shift;
                     let phantom_line = line;
-                    if same_line {
-                        col_shift = col_shift + phantom.text.len()
-                            - (end_character - phantom.col) ;
-                    } else {
-                        line = end_line;
-                        col_shift += phantom.text.len();
-                    }
+                        col_shift = col_shift + phantom.text.len();
                     (
                         pre_col_shift,
                         phantom.text.len(),
@@ -842,10 +810,24 @@ impl PhantomTextMultiLine {
                         phantom,
                     )
                 }
-                PhantomTextKind::CrossLineFoldedRangEnd {..} => {
-                    // col_shift -= phantom.col;
-                    (0, 0, (line, phantom.col), phantom)
-                }
+                // PhantomTextKind::CrossLineFoldedRangStart {
+                //     end_line,  ..
+                // } => {
+                //     let pre_col_shift = col_shift;
+                //     let phantom_line = line;
+                //         line = end_line;
+                //         col_shift += phantom.text.len();
+                //     (
+                //         pre_col_shift,
+                //         phantom.text.len(),
+                //         (phantom_line, phantom.col),
+                //         phantom,
+                //     )
+                // }
+                // PhantomTextKind::CrossLineFoldedRangEnd {..} => {
+                //     // col_shift -= phantom.col;
+                //     (0, 0, (line, phantom.col), phantom)
+                // }
                 _ => {
                     let pre_col_shift = col_shift;
                     col_shift += phantom.text.len();
@@ -879,7 +861,7 @@ impl PhantomTextMultiLine {
         let line = self.visual_line - 1;
         self.text.iter().map(move |phantom| {
             match phantom.kind {
-                PhantomTextKind::CrossLineFoldedRangEnd{..} => {
+                PhantomTextKind::LineFoldedRang{ ..} => {
                     (before_phantom_len, 0, (phantom.line, phantom.col), (line, phantom.final_col), phantom)
                 }
                 _ => {
@@ -961,13 +943,10 @@ mod test {
     use smallvec::SmallVec;
     use crate::views::editor::phantom_text::{PhantomText, PhantomTextKind, PhantomTextLine, PhantomTextMultiLine};
     use std::default::Default;
-    /**
-    2 |    if true {
-    3 |      println!("start");
-    4 |    } else {
-    5 |      println!("end");
-    6 |    }
-     **/
+
+    // "0123456789012345678901234567890123456789
+    // "    if true {nr    } else {nr    }nr"
+    // "    if true {...} else {...}nr"
     fn init_folded_line(visual_line: usize, folded: bool) -> PhantomTextLine{
         let mut text: SmallVec<[PhantomText; 6]> = SmallVec::new();
         let origin_text_len ;
@@ -975,11 +954,8 @@ mod test {
             (2, _) => {
                 origin_text_len = 15;
                 text.push(PhantomText{
-                    kind: PhantomTextKind::FoldedRangStart {
-                        same_line: false,
-                        start_line_len: 15,
-                        end_line: 3,
-                        end_character: 5,
+                    kind: PhantomTextKind::LineFoldedRang {
+                        len: 3, next_line: Some(3)
                     }, line:1, final_col: 12,
                     col: 12,
                     text: "{...}".to_string(), ..Default::default()
@@ -988,34 +964,32 @@ mod test {
             (4, false) => {
                 origin_text_len = 14;
                 text.push(PhantomText{
-                    kind: PhantomTextKind::CrossLineFoldedRangEnd {
-                        same_line: false,
-                        end_line: 3,
-                        start_character: 12,
+                    kind: PhantomTextKind::LineFoldedRang {
+                        next_line: None,
+                        len: 5,
                     },
-                    line: 3, final_col: 5,
-                    col: 5,
+                    line: 3, final_col: 0,
+                    col: 0,
                     text: "".to_string(), ..Default::default()
                 });
             }
             (4, true) => {
+                // "0123456789012345678901234567890123456789
+                // "    } else {nr    }nr"
                 origin_text_len = 14;
                 text.push(PhantomText{
-                    kind: PhantomTextKind::CrossLineFoldedRangEnd {
-                        same_line: false,
-                        end_line: 3,
-                        start_character: 12,
+                    kind: PhantomTextKind::LineFoldedRang {
+                        next_line: None,
+                        len: 5,
                     },
-                    line: 3, final_col: 5,
-                    col: 5,
+                    line: 3, final_col: 0,
+                    col: 0,
                     text: "".to_string(), ..Default::default()
                 });
                 text.push(PhantomText{
-                    kind: PhantomTextKind::FoldedRangStart {
-                        same_line: false,
-                        start_line_len: 14,
-                        end_line: 5,
-                        end_character: 5,
+                    kind: PhantomTextKind::LineFoldedRang {
+                        next_line: Some(5),
+                        len: 3,
                     }, line:3, final_col: 11,
                     col: 11,
                     text: "{...}".to_string(), ..Default::default()
@@ -1024,13 +998,12 @@ mod test {
             (6, _) => {
                 origin_text_len = 7;
                 text.push(PhantomText{
-                    kind: PhantomTextKind::CrossLineFoldedRangEnd {
-                        same_line: false,
-                        end_line: 5,
-                        start_character: 11,
+                    kind: PhantomTextKind::LineFoldedRang {
+                        next_line: None,
+                        len: 5,
                     },
-                    line: 5, final_col: 5,
-                    col: 5,
+                    line: 5, final_col: 0,
+                    col: 0,
                     text: "".to_string(), ..Default::default()
                 });
             }
@@ -1047,6 +1020,7 @@ mod test {
 
     #[test]
     fn test_init() {
+
         let line2 = init_folded_line(2, false);
         let line4 = init_folded_line(4, false);
         let line_folded_4 = init_folded_line(4, true);
@@ -1111,6 +1085,7 @@ mod test {
         // "    if true {nr    } else {nr    }nr"
         // "    if true {...} else {...}nr"
         // "0123456789012345678901234567890123456789
+        //              s    e     s    e
         let line = get_merged_data();
         let orgin_text: Vec<char> = "    if true {nr    } else {nr    }nr".chars().into_iter().collect();
         {
@@ -1161,16 +1136,16 @@ mod test {
         let mut rs = String::new();
         let mut latest_col = 0;
         for text in lines {
-            if let PhantomTextKind::FoldedRangStart { same_line, start_line_len, .. } = text.kind {
+            if let PhantomTextKind::LineFoldedRang { len, .. } = text.kind {
                 rs.push_str(sub_str(origin, latest_col, text.col));
                 rs.push_str(text.text.as_str());
-                if same_line {
-                    latest_col = text.col;
-                } else {
-                    latest_col = start_line_len;
-                }
-            } else if let PhantomTextKind::CrossLineFoldedRangEnd { .. } = text.kind {
-                latest_col = text.col;
+                latest_col = text.col + len;
+            // } else if let PhantomTextKind::CrossLineFoldedRangStart { end_character, .. } = text.kind {
+            //     rs.push_str(sub_str(origin, latest_col, text.col));
+            //     rs.push_str(text.text.as_str());
+            //     latest_col = end_character;
+            // } else if let PhantomTextKind::CrossLineFoldedRangEnd { .. } = text.kind {
+            //     latest_col = text.col;
             } else {
                 rs.push_str(text.text.as_str());
                 latest_col = text.col;

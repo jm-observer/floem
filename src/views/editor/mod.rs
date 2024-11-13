@@ -52,6 +52,7 @@ pub mod visual_line;
 
 pub use floem_editor_core as core;
 use peniko::Brush;
+use floem_renderer::text::FamilyOwned;
 use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use self::{
@@ -1243,10 +1244,8 @@ fn strip_suffix(line_content_original: &str) -> String {
 
 
 fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a str, style: Rc<dyn Styling>, edid: EditorId
-                                    , es: &'a EditorStyle, doc: Rc<dyn Document>, collapsed_line_col: usize) -> (PhantomTextLine, Cow<'a , str>, AttrsList, Option<(usize, usize)>
+                                    , es: &'a EditorStyle, doc: Rc<dyn Document>, collapsed_line_col: usize, attrs: Attrs<'a>) -> (PhantomTextLine, Cow<'a , str>, Vec<(usize, usize, Color, Attrs<'a>)>, Option<usize>
 ){
-    let font_size = style.font_size(edid, line);
-    // Combine the phantom text with the line content
     let phantom_text = doc.phantom_text(edid, es, line);
     // todo
     let collapsed = phantom_text.combine_with_text(line_content);
@@ -1255,21 +1254,16 @@ fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a str, style: R
     // if line == 10 || line == 12 {
     //     tracing::info!("line={line} collapsed_line_col={collapsed_line_col} ");
     // }
+    // let mut attrs_list = AttrsList::new(attrs);
 
-    let family = style.font_family(edid, line);
-    let attrs = Attrs::new()
-        .color(es.ed_text_color())
-        .family(&family)
-        .font_size(font_size as f32)
-        .line_height(LineHeightValue::Px(style.line_height(edid, line)));
-    let mut attrs_list = AttrsList::new(attrs);
-
-    style.apply_attr_styles(line, attrs, &mut attrs_list, &phantom_text, collapsed_line_col);
-    let phantom_color = es.phantom_color();
+    let styles = style.line_style(line).into_iter().map(|(start, end, color)| (start + collapsed_line_col, end + collapsed_line_col, color, attrs)).collect();
+    // todo
+    // style.apply_attr_styles(line, attrs, &mut attrs_list, &phantom_text, collapsed_line_col);
+    // let phantom_color = es.phantom_color();
     // Apply phantom text specific styling
-    phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color, collapsed_line_col);
+    // phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color, collapsed_line_col);
 
-    (phantom_text, collapsed.0, attrs_list, collapsed.1)
+    (phantom_text, collapsed.0, styles, collapsed.1)
 }
 
 
@@ -1300,43 +1294,71 @@ impl TextLayoutProvider for Editor {
         // though we immediately combine with phantom text so that's a thing.
         let line_content = strip_suffix(&line_content_original);
 
-        let (phantom_text, line_content, mut attrs_list, mut collapsed_line_col)
-            = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0);
+        let family = style.font_family(edid, line);
+        let font_size = style.font_size(edid, line);
+        let attrs = Attrs::new()
+            .color(es.ed_text_color())
+            .family(&family)
+            .font_size(font_size  as f32)
+            .line_height(LineHeightValue::Px(style.line_height(edid, line)));
+
+        let (phantom_text, line_content, multi_styles, mut collapsed_line_col)
+            = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0, attrs);
 
         let mut phantom_text = PhantomTextMultiLine::new(phantom_text);
+        let mut attrs_list = AttrsList::new(attrs);
+        for (start, end, color, attrs) in multi_styles.into_iter() {
+            let (Some(start), Some(end)) = (
+                phantom_text.col_at(start),
+                phantom_text.col_at(end),
+            ) else {
+                continue;
+            };
+            attrs_list.add_span(
+                start..end,
+                attrs.color(color),
+            );
+        }
         // if line == 1 {
         //     tracing::info!("{line_content:?} {}", line_content.len());
         //     phantom_text.log("start");
         // }
         let mut line_content = line_content.to_string();
-        while let Some((collapsed_line, ..)) = collapsed_line_col.take() {
+        while let Some(collapsed_line) = collapsed_line_col.take() {
             let line_content_original = text.line_content(collapsed_line);
             let next_line_content = strip_suffix(&line_content_original);
             let offset_col = line_content.len();
-            let (next_phantom_text, collapsed_line_content, collapsed_attrs_list, next_collapsed_line_col)
-                = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col);
+            let family = style.font_family(edid, line);
+            let font_size = style.font_size(edid, line) as f32;
+            let attrs = Attrs::new()
+                .color(es.ed_text_color())
+                .family(&family)
+                .font_size(font_size)
+                .line_height(LineHeightValue::Px(style.line_height(edid, line)));
+            let (next_phantom_text, collapsed_line_content, styles, next_collapsed_line_col)
+                = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col, attrs);
             collapsed_line_col = next_collapsed_line_col;
-
             line_content.push_str(&collapsed_line_content);
-            // if line == 1 {
-            //     tracing::info!("collapsed_line_content={collapsed_line_content:?} {}", collapsed_line_content.len());
-            //     tracing::info!("line_content={line_content:?} {}", line_content.len());
-            // }
-            for (rangs, attrs) in collapsed_attrs_list.spans() {
-                attrs_list.0.add_span(rangs.clone(), attrs.as_attrs())
+            for (start, end, color, attrs) in styles.into_iter() {
+                let (Some(start), Some(end)) = (
+                    phantom_text.col_at(start),
+                    phantom_text.col_at(end),
+                ) else {
+                    continue;
+                };
+                attrs_list.add_span(
+                    start..end,
+                    attrs.color(color),
+                );
             }
             phantom_text.merge(next_phantom_text);
         }
-        // if line == 1 {
-        //     phantom_text.log("end");
-        // }
+        let phantom_color = es.phantom_color();
+        phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
         phantom_text.update_final_text_len(line_content.len());
-        // if line == 8 {
-        //     phantom_text.log("new_text_layout");
-        //     // for span in attrs_list.spans() {
-        //     //     tracing::info!("{}-{}", span.0.start, span.0.end);
-        //     // }
-        // }
+
+
+
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
         let mut text_layout = TextLayout::new_tracing(line, &line_content, attrs_list);

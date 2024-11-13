@@ -4,7 +4,7 @@ use crate::{
     keyboard::Modifiers,
     peniko::Color,
     reactive::{RwSignal, Scope},
-    text::{Attrs, AttrsList, FamilyOwned, Stretch, Weight},
+    text::{FamilyOwned, Stretch, Weight},
     views::EditorCustomStyle,
 };
 use downcast_rs::{impl_downcast, Downcast};
@@ -346,16 +346,18 @@ pub trait Styling {
     // TODO: get other style information based on EditorColor enum?
     // TODO: line_style equivalent?
 
-    /// Apply custom attribute styles to the line
-    ///
-    /// 原始文本的样式，如语法前景色
-    fn apply_attr_styles(
-        &self,
-        _line: usize,
-        _default: Attrs,
-        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine, _collapsed_line_col: usize
-    ) {
-    }
+    // /// Apply custom attribute styles to the line
+    // ///
+    // /// 原始文本的样式，如语法前景色
+    // fn apply_attr_styles(
+    //     &self,
+    //     _line: usize,
+    //     _default: Attrs,
+    //     _attrs: &mut AttrsList, _phantom_text: &PhantomTextMultiLine, _collapsed_line_col: usize
+    // ) {
+    // }
+
+    fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)>;
 
     /// todo ? 幽灵文本的样式
     fn apply_layout_styles(
@@ -706,13 +708,17 @@ impl Styling for SimpleStyling {
         self.atomic_soft_tabs
     }
 
-    fn apply_attr_styles(
-        &self,
-        _line: usize,
-        _default: Attrs,
-        _attrs: &mut AttrsList, _phantom_text: &PhantomTextLine, _collapsed_line_col: usize
-    ) {
+    fn line_style(&self, _line: usize) -> Vec<(usize, usize, Color)> {
+        Vec::new()
     }
+
+    // fn apply_attr_styles(
+    //     &self,
+    //     _line: usize,
+    //     _default: Attrs,
+    //     _attrs: &mut AttrsList, _phantom_text: &PhantomTextMultiLine, _collapsed_line_col: usize
+    // ) {
+    // }
 
     fn apply_layout_styles(
         &self, _layout: &TextLayout, _phantom_text: &PhantomTextMultiLine,
