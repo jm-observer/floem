@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use std::borrow::Cow;
 
 use crate::{
     action::{exec_after, TimerToken},
@@ -52,7 +51,6 @@ pub mod visual_line;
 
 pub use floem_editor_core as core;
 use peniko::Brush;
-use floem_renderer::text::FamilyOwned;
 use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use self::{
@@ -1242,29 +1240,20 @@ fn strip_suffix(line_content_original: &str) -> String {
     }
 }
 
-
-fn calcuate_line_text_and_style<'a>(line: usize, line_content: &'a str, style: Rc<dyn Styling>, edid: EditorId
-                                    , es: &'a EditorStyle, doc: Rc<dyn Document>, collapsed_line_col: usize, attrs: Attrs<'a>) -> (PhantomTextLine, Cow<'a , str>, Vec<(usize, usize, Color, Attrs<'a>)>, Option<usize>
-){
-    let phantom_text = doc.phantom_text(edid, es, line);
-    // todo
-    let collapsed = phantom_text.combine_with_text(line_content);
-
-
-    // if line == 10 || line == 12 {
-    //     tracing::info!("line={line} collapsed_line_col={collapsed_line_col} ");
-    // }
-    // let mut attrs_list = AttrsList::new(attrs);
-
-    let styles = style.line_style(line).into_iter().map(|(start, end, color)| (start + collapsed_line_col, end + collapsed_line_col, color, attrs)).collect();
-    // todo
-    // style.apply_attr_styles(line, attrs, &mut attrs_list, &phantom_text, collapsed_line_col);
-    // let phantom_color = es.phantom_color();
-    // Apply phantom text specific styling
-    // phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color, collapsed_line_col);
-
-    (phantom_text, collapsed.0, styles, collapsed.1)
+fn push_strip_suffix(line_content_original: &str, rs: &mut String) {
+    if let Some(s) = line_content_original.strip_suffix("\r\n") {
+        rs.push_str(s);
+        rs.push_str("  ");
+        // format!("{s}  ")
+    } else if let Some(s) = line_content_original.strip_suffix('\n') {
+        rs.push_str(s);
+        rs.push_str(" ");
+    } else {
+        rs.push_str(line_content_original);
+    }
 }
+
+
 
 
 impl TextLayoutProvider for Editor {
@@ -1287,12 +1276,13 @@ impl TextLayoutProvider for Editor {
         let doc = self.doc();
         let es = self.es.get_untracked();
 
-        let line_content_original = text.line_content(line);
+        let mut line_content = String::new();
         // Get the line content with newline characters replaced with spaces
         // and the content without the newline characters
         // TODO: cache or add some way that text layout is created to auto insert the spaces instead
         // though we immediately combine with phantom text so that's a thing.
-        let line_content = strip_suffix(&line_content_original);
+        let line_content_original = text.line_content(line);
+        push_strip_suffix(&line_content_original, &mut line_content);
 
         let family = style.font_family(edid, line);
         let font_size = style.font_size(edid, line);
@@ -1302,8 +1292,9 @@ impl TextLayoutProvider for Editor {
             .font_size(font_size  as f32)
             .line_height(LineHeightValue::Px(style.line_height(edid, line)));
 
-        let (phantom_text, line_content, multi_styles, mut collapsed_line_col)
-            = calcuate_line_text_and_style(line, &line_content, style.clone(), edid, &es, doc.clone(), 0, attrs);
+        let phantom_text = doc.phantom_text(edid, &es, line);
+        let mut collapsed_line_col = phantom_text.folded_line();
+        let multi_styles: Vec<(usize, usize, Color, Attrs)> = style.line_style(line).into_iter().map(|(start, end, color)| (start, end, color, attrs)).collect();
 
         let mut phantom_text = PhantomTextMultiLine::new(phantom_text);
         let mut attrs_list = AttrsList::new(attrs);
@@ -1323,11 +1314,10 @@ impl TextLayoutProvider for Editor {
         //     tracing::info!("{line_content:?} {}", line_content.len());
         //     phantom_text.log("start");
         // }
-        let mut line_content = line_content.to_string();
         while let Some(collapsed_line) = collapsed_line_col.take() {
-            let line_content_original = text.line_content(collapsed_line);
-            let next_line_content = strip_suffix(&line_content_original);
-            let offset_col = line_content.len();
+            push_strip_suffix(&text.line_content(collapsed_line), &mut line_content);
+
+            let offset_col = phantom_text.final_text_len();
             let family = style.font_family(edid, line);
             let font_size = style.font_size(edid, line) as f32;
             let attrs = Attrs::new()
@@ -1335,10 +1325,13 @@ impl TextLayoutProvider for Editor {
                 .family(&family)
                 .font_size(font_size)
                 .line_height(LineHeightValue::Px(style.line_height(edid, line)));
-            let (next_phantom_text, collapsed_line_content, styles, next_collapsed_line_col)
-                = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col, attrs);
-            collapsed_line_col = next_collapsed_line_col;
-            line_content.push_str(&collapsed_line_content);
+            // let (next_phantom_text, collapsed_line_content, styles, next_collapsed_line_col)
+            //     = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col, attrs);
+
+            let next_phantom_text = doc.phantom_text(edid, &es, collapsed_line);
+            collapsed_line_col = next_phantom_text.folded_line();
+            let styles : Vec<(usize, usize, Color, Attrs)> = style.line_style(collapsed_line).into_iter().map(|(start, end, color)| (start + offset_col, end + offset_col, color, attrs)).collect();
+
             for (start, end, color, attrs) in styles.into_iter() {
                 let (Some(start), Some(end)) = (
                     phantom_text.col_at(start),
@@ -1355,13 +1348,11 @@ impl TextLayoutProvider for Editor {
         }
         let phantom_color = es.phantom_color();
         phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
-        phantom_text.update_final_text_len(line_content.len());
-
-
 
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
-        let mut text_layout = TextLayout::new_tracing(line, &line_content, attrs_list);
+        let final_line_content = phantom_text.final_line_content(&line_content);
+        let mut text_layout = TextLayout::new_tracing(line, &final_line_content, attrs_list);
         // text_layout.set_tab_width(style.tab_width(edid, line));
 
         // dbg!(self.editor_style.with(|s| s.wrap_method()));
