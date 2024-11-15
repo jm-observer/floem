@@ -202,6 +202,7 @@ pub struct TextLayout {
     // only for tracing
     line: usize,
     buffer: BufferLine,
+    // ?
     pub lines_range: Range<usize>,
     width_opt: Option<f32>,
     height_opt: Option<f32>,

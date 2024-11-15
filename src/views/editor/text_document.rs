@@ -20,8 +20,10 @@ use floem_reactive::{
 };
 use lapce_xi_rope::{Rope, RopeDelta};
 use smallvec::{smallvec, SmallVec};
+use tracing::error;
 
 use crate::keyboard::Modifiers;
+use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use super::{
     actions::{handle_command_default, CommonAction},
@@ -253,6 +255,7 @@ impl DocumentPhantom for TextDocument {
                 text.push(PhantomText {
                     kind: PhantomTextKind::Placeholder, line,
                     col: 0,
+                    merge_col: 0,
                     final_col: 0,
                     affinity: None,
                     text: placeholder,
@@ -272,6 +275,11 @@ impl DocumentPhantom for TextDocument {
 
         PhantomTextLine::new(line, origin_text_len, text)
     }
+
+    // fn multi_phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextMultiLine {
+    //     error!("todo multi_phantom_text");
+    //     crate::views::editor::phantom_text::PhantomTextMultiLine::new(self.phantom_text(edid, styling, line))
+    // }
 
     // fn has_multiline_phantom(&self, edid: EditorId, _styling: &EditorStyle) -> bool {
     //     if !self.buffer.with_untracked(Buffer::is_empty) {

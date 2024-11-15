@@ -226,13 +226,11 @@ pub trait TextLayoutProvider {
     fn new_text_layout(
         &self,
         line: usize,
-        font_size: usize,
-        wrap: ResolvedWrap,
     ) -> Arc<TextLayoutLine>;
 
     /// Translate a column position into the position it would be before combining with the phantom
     /// text
-    fn before_phantom_col(&self, line: usize, col: usize) -> usize;
+    fn before_phantom_col(&self, line: usize, col: usize) -> (usize, usize);
 
     // fn has_multiline_phantom(&self) -> bool;
 }
@@ -863,7 +861,7 @@ impl Lines {
                 .start_layout_cols(text_prov, line)
                 .nth(line_index)
                 .unwrap_or(0);
-            let col = text_prov.before_phantom_col(line, col);
+            let (line, col) = text_prov.before_phantom_col(line, col);
 
             rope_text.offset_of_line_col(line, col)
         } else {
@@ -936,7 +934,7 @@ fn get_init_text_layout(
     text_prov: &Editor,
     line: usize,
     font_size: usize,
-    wrap: ResolvedWrap,
+    _wrap: ResolvedWrap,
     last_vline: &Cell<Option<VLine>>,
 ) -> Arc<TextLayoutLine> {
     // If we don't have a second layer of the hashmap initialized for this specific font size,
@@ -956,7 +954,7 @@ fn get_init_text_layout(
         .is_some();
     // If there isn't an entry then we actually have to create it
     if !cache_exists {
-        let text_layout = text_prov.new_text_layout(line, font_size, wrap);
+        let text_layout = text_prov.new_text_layout(line);
 
         // Update last vline
         if let Some(vline) = last_vline.get() {
@@ -1113,7 +1111,7 @@ fn find_start_line_index(
 
     while let Some((i, (layout_start, _))) = starts.next() {
         // TODO: we should just apply after_col to col to do this transformation once
-        let layout_start = text_prov.before_phantom_col(line, layout_start);
+        let (_line, layout_start) = text_prov.before_phantom_col(line, layout_start);
         if layout_start >= col {
             return Some(i);
         }
@@ -1122,7 +1120,7 @@ fn find_start_line_index(
             .peek()
             .map(|(_, (next_start, _))| text_prov.before_phantom_col(line, *next_start));
 
-        if let Some(next_start) = next_start {
+        if let Some((_line, next_start)) = next_start {
             if next_start > col {
                 // The next layout starts *past* our column, so we're on the previous line.
                 return Some(i);
@@ -1309,7 +1307,7 @@ fn find_vline_init_info_forward(
                     .start_layout_cols(text_prov, cur_line)
                     .nth(line_index)
                     .unwrap_or(0);
-                let col = text_prov.before_phantom_col(cur_line, col);
+                let (_line, col) = text_prov.before_phantom_col(cur_line, col);
 
                 let offset = rope_text.offset_of_line_col(cur_line, col);
                 return Some((offset, RVLine::new(cur_line, line_index)));
@@ -1469,9 +1467,9 @@ fn vline_init_info_b(
         .start_layout_cols(text_prov, rv.line)
         .nth(rv.line_index)
         .unwrap_or(0);
-    let col = text_prov.before_phantom_col(rv.line, col);
+    let (line, col) = text_prov.before_phantom_col(rv.line, col);
 
-    let offset = rope_text.offset_of_line_col(rv.line, col);
+    let offset = rope_text.offset_of_line_col(line, col);
 
     Some((offset, rv))
 }
@@ -1792,7 +1790,7 @@ fn end_of_rvline(
     }
 
     if let Some((_, end_col)) = layouts.get_layout_col(text_prov, font_size, line, line_index) {
-        let end_col = text_prov.before_phantom_col(line, end_col);
+        let (line, end_col) = text_prov.before_phantom_col(line, end_col);
         text_prov.rope_text().offset_of_line_col(line, end_col)
     } else {
         let rope_text = text_prov.rope_text();
@@ -1850,7 +1848,7 @@ fn rvline_offset(
 ) -> usize {
     let rope_text = text_prov.rope_text();
     if let Some((line_col, _)) = layouts.get_layout_col(text_prov, font_size, line, line_index) {
-        let line_col = text_prov.before_phantom_col(line, line_col);
+        let (line, line_col) = text_prov.before_phantom_col(line, line_col);
 
         rope_text.offset_of_line_col(line, line_col)
     } else {
@@ -1873,7 +1871,7 @@ fn next_rvline(
     let rope_text = text_prov.rope_text();
     if let Some(layout_line) = layouts.get(font_size, line) {
         if let Some((line_col, _)) = layout_line.layout_cols(text_prov, line).nth(line_index + 1) {
-            let line_col = text_prov.before_phantom_col(line, line_col);
+            let (line, line_col) = text_prov.before_phantom_col(line, line_col);
             let offset = rope_text.offset_of_line_col(line, line_col);
 
             (RVLine::new(line, line_index + 1), offset)
@@ -1917,10 +1915,10 @@ fn prev_rvline(
                 .enumerate()
                 .last()
                 .unwrap_or((0, 0));
-            let line_col = text_prov.before_phantom_col(prev_line, line_col);
-            let offset = rope_text.offset_of_line_col(prev_line, line_col);
+            let (line, line_col) = text_prov.before_phantom_col(prev_line, line_col);
+            let offset = rope_text.offset_of_line_col(line, line_col);
 
-            Some((RVLine::new(prev_line, i), offset))
+            Some((RVLine::new(line, i), offset))
         } else {
             // There was no text layout line, so the previous line is a normal line.
             let prev_line_offset = rope_text.offset_of_line(prev_line);
@@ -1936,7 +1934,7 @@ fn prev_rvline(
                 .layout_cols(text_prov, line)
                 .nth(prev_line_index)
             {
-                let line_col = text_prov.before_phantom_col(line, line_col);
+                let (line, line_col) = text_prov.before_phantom_col(line, line_col);
                 let offset = rope_text.offset_of_line_col(line, line_col);
 
                 Some((RVLine::new(line, prev_line_index), offset))

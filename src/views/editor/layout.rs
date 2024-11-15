@@ -2,10 +2,9 @@ use crate::{
     peniko::Color,
     text::{LayoutLine, TextLayout},
 };
-use floem_editor_core::buffer::rope_text::RopeText;
 use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
-use super::{Editor, visual_line::TextLayoutProvider};
+use super::{Editor};
 
 #[derive(Clone, Debug)]
 pub struct LineExtraStyle {
@@ -18,15 +17,22 @@ pub struct LineExtraStyle {
     pub wave_line: Option<Color>,
 }
 
-/// 以原始文本行为单位，的相关
+/// --以原始文本行为单位，的相关--
+///
+/// 应该是视觉行（包含了折叠行）的信息
 #[derive(Clone)]
 pub struct TextLayoutLine {
     /// Extra styling that should be applied to the text
     /// (x0, x1 or line display end, style)
+    /// todo?暂时没有数据，下划线等？
     pub extra_style: Vec<LineExtraStyle>,
+    // 文本：包含折叠行的文本、幽灵文本，及其所有的样式（背景色等）
     pub text: TextLayout,
+    // ?
     pub whitespaces: Option<Vec<(char, (f64, f64))>>,
+    // 缩进?
     pub indent: f64,
+    // 幽灵文本相关信息
     pub phantom_text: PhantomTextMultiLine,
 }
 
@@ -51,8 +57,8 @@ impl TextLayoutLine {
     /// Iterator over the (start, end) columns of the relevant layouts.
     pub fn layout_cols<'a>(
         &'a self,
-        text_prov: &'a Editor,
-        line: usize,
+        _text_prov: &'a Editor,
+        _line: usize,
     ) -> impl Iterator<Item = (usize, usize)> + 'a {
         let mut prefix = None;
         // Include an entry if there is nothing
@@ -65,7 +71,7 @@ impl TextLayoutLine {
                 }
             }
 
-        let line_v = line;
+        // let line_v = line;
         let iter = self
             .text
             .line().layout_opt().into_iter().map(|x| (self
@@ -77,30 +83,31 @@ impl TextLayoutLine {
                 let line_start = line_range.start;
                 tl_line.align();
 
+                // todo????
                 let start = line_start + l.glyphs[0].start;
                 let end = line_start + l.glyphs.last().unwrap().end;
 
-                let text = text_prov.rope_text();
-                // We can't just use the original end, because the *true* last glyph on the line
-                // may be a space, but it isn't included in the layout! Though this only happens
-                // for single spaces, for some reason.
-                let pre_end = text_prov.before_phantom_col(line_v, end);
-
-
-                // TODO(minor): We don't really need the entire line, just the two characters after
-                let line_end = text.line_end_col(line, true);
-
-                let end = if pre_end <= line_end {
-                    let line_offset = text.offset_of_line(line);
-                    let after = text.slice_to_cow(line_offset + pre_end..line_offset + line_end);
-                    if after.starts_with(' ') && !after.starts_with("  ") {
-                        end + 1
-                    } else {
-                        end
-                    }
-                } else {
-                    end
-                };
+                // let text = text_prov.rope_text();
+                // // We can't just use the original end, because the *true* last glyph on the line
+                // // may be a space, but it isn't included in the layout! Though this only happens
+                // // for single spaces, for some reason.
+                // let pre_end = text_prov.before_phantom_col(line_v, end);
+                //
+                //
+                // // TODO(minor): We don't really need the entire line, just the two characters after
+                // let line_end = text.line_end_col(line, true);
+                //
+                // let end = if pre_end <= line_end {
+                //     let line_offset = text.offset_of_line(line);
+                //     let after = text.slice_to_cow(line_offset + pre_end..line_offset + line_end);
+                //     if after.starts_with(' ') && !after.starts_with("  ") {
+                //         end + 1
+                //     } else {
+                //         end
+                //      }
+                // } else {
+                //     end
+                // };
 
                 (start, end)
             });

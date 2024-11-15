@@ -1006,7 +1006,7 @@ impl Editor {
     /// The boolean indicates whether the point is within the text bounds.
     /// Points outside of vertical bounds will return the last line.
     /// Points outside of horizontal bounds will return the last column on the line.
-    pub fn line_col_of_point(&self, _mode: Mode, point: Point, tracing: bool) -> ((usize, usize), bool) {
+    pub fn line_col_of_point(&self, _mode: Mode, point: Point, _tracing: bool) -> ((usize, usize), bool) {
         // TODO: this assumes that line height is constant!
         let line_height = f64::from(self.style().line_height(self.id(), 0));
         let info = if point.y <= 0.0 {
@@ -1040,7 +1040,7 @@ impl Editor {
         let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
         // We have to unapply the phantom text shifting in order to get back to the column in
         // the actual buffer
-        let (line, col) = text_layout.phantom_text.before_col_2(hit_point.index, tracing);
+        let (line, col) = text_layout.phantom_text.origin_position_of_final_col(hit_point.index);
         // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
         // right end will just go to the end of the line.
         // let max_col = self.line_end_col(line, mode != Mode::Normal);
@@ -1076,7 +1076,7 @@ impl Editor {
     }
 
     // TODO: colposition probably has issues with wrapping?
-    pub fn line_horiz_col(&self, line: usize, horiz: &ColPosition, caret: bool) -> usize {
+    pub fn line_horiz_col(&self, line: usize, horiz: &ColPosition, caret: bool) -> (usize, usize) {
         match *horiz {
             ColPosition::Col(x) => {
                 // TODO: won't this be incorrect with phantom text? Shouldn't this just use
@@ -1084,13 +1084,11 @@ impl Editor {
                 let text_layout = self.text_layout(line);
                 let hit_point = text_layout.text.hit_point(Point::new(x, 0.0));
                 let n = hit_point.index;
-                let col = text_layout.phantom_text.before_col(n);
-
-                col.min(self.line_end_col(line, caret))
+                text_layout.phantom_text.origin_position_of_final_col(n)
             }
-            ColPosition::End => self.line_end_col(line, caret),
-            ColPosition::Start => 0,
-            ColPosition::FirstNonBlank => self.first_non_blank_character_on_line(line),
+            ColPosition::End => (line, self.line_end_col(line, caret)),
+            ColPosition::Start => (line, 0),
+            ColPosition::FirstNonBlank => (line, self.first_non_blank_character_on_line(line)),
         }
     }
 
@@ -1101,7 +1099,7 @@ impl Editor {
         RVLine { line, line_index }: RVLine,
         horiz: &ColPosition,
         caret: bool,
-    ) -> usize {
+    ) -> (usize, usize) {
         match *horiz {
             ColPosition::Col(x) => {
                 let text_layout = self.text_layout(line);
@@ -1114,9 +1112,7 @@ impl Editor {
                     .unwrap_or(0.0);
                 let hit_point = text_layout.text.hit_point(Point::new(x, y_pos as f64));
                 let n = hit_point.index;
-                let col = text_layout.phantom_text.before_col(n);
-
-                col.min(self.line_end_col(line, caret))
+                text_layout.phantom_text.origin_position_of_final_col(n)
             }
             // Otherwise it is the same as the other function
             _ => self.line_horiz_col(line, horiz, caret),
@@ -1230,15 +1226,15 @@ impl Editor {
     }
 }
 
-fn strip_suffix(line_content_original: &str) -> String {
-    if let Some(s) = line_content_original.strip_suffix("\r\n") {
-        format!("{s}  ")
-    } else if let Some(s) = line_content_original.strip_suffix('\n') {
-        format!("{s} ",)
-    } else {
-        line_content_original.to_string()
-    }
-}
+// fn strip_suffix(line_content_original: &str) -> String {
+//     if let Some(s) = line_content_original.strip_suffix("\r\n") {
+//         format!("{s}  ")
+//     } else if let Some(s) = line_content_original.strip_suffix('\n') {
+//         format!("{s} ",)
+//     } else {
+//         line_content_original.to_string()
+//     }
+// }
 
 fn push_strip_suffix(line_content_original: &str, rs: &mut String) {
     if let Some(s) = line_content_original.strip_suffix("\r\n") {
@@ -1247,7 +1243,7 @@ fn push_strip_suffix(line_content_original: &str, rs: &mut String) {
         // format!("{s}  ")
     } else if let Some(s) = line_content_original.strip_suffix('\n') {
         rs.push_str(s);
-        rs.push_str(" ");
+        rs.push(' ');
     } else {
         rs.push_str(line_content_original);
     }
@@ -1265,8 +1261,6 @@ impl TextLayoutProvider for Editor {
     fn new_text_layout(
         &self,
         line: usize,
-        _font_size: usize,
-        _wrap: ResolvedWrap,
     ) -> Arc<TextLayoutLine> {
         // TODO: we could share text layouts between different editor views given some knowledge of
         // their wrapping
@@ -1310,10 +1304,7 @@ impl TextLayoutProvider for Editor {
                 attrs.color(color),
             );
         }
-        // if line == 1 {
-        //     tracing::info!("{line_content:?} {}", line_content.len());
-        //     phantom_text.log("start");
-        // }
+
         while let Some(collapsed_line) = collapsed_line_col.take() {
             push_strip_suffix(&text.line_content(collapsed_line), &mut line_content);
 
@@ -1349,6 +1340,14 @@ impl TextLayoutProvider for Editor {
         let phantom_color = es.phantom_color();
         phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
 
+        if line == 1 {
+            tracing::info!("start");
+            for (range, attr) in attrs_list.spans(){
+                tracing::info!("{range:?} {attr:?}");
+            }
+            tracing::info!("");
+        }
+
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
         let final_line_content = phantom_text.final_line_content(&line_content);
@@ -1380,43 +1379,48 @@ impl TextLayoutProvider for Editor {
         // tracing::info!("line={line} {:?}", whitespaces);
         let indent_line = style.indent_line(edid, line, &line_content_original);
 
-        let indent = if indent_line != line {
-            // TODO: This creates the layout if it isn't already cached, but it doesn't cache the
-            // result because the current method of managing the cache is not very smart.
-            let layout = self.try_get_text_layout(indent_line).unwrap_or_else(|| {
-                self.new_text_layout(
-                    indent_line,
-                    style.font_size(edid, indent_line),
-                    self.lines.wrap(),
-                )
-            });
-            layout.indent + 1.0
-        } else {
-            let offset = text.first_non_blank_character_on_line(indent_line);
-            let (_, col) = text.offset_to_line_col(offset);
-            text_layout.hit_position(col).point.x
-        };
+        // let indent = if indent_line != line {
+        //     // TODO: This creates the layout if it isn't already cached, but it doesn't cache the
+        //     // result because the current method of managing the cache is not very smart.
+        //     let layout = self.try_get_text_layout(indent_line).unwrap_or_else(|| {
+        //         self.new_text_layout(
+        //             indent_line,
+        //             style.font_size(edid, indent_line),
+        //             self.lines.wrap(),
+        //         )
+        //     });
+        //     layout.indent + 1.0
+        // } else {
+        //     let offset = text.first_non_blank_character_on_line(indent_line);
+        //     let (_, col) = text.offset_to_line_col(offset);
+        //     text_layout.hit_position(col).point.x
+        // };
+        let offset = text.first_non_blank_character_on_line(indent_line);
+        let (_, col) = text.offset_to_line_col(offset);
+        let indent =  text_layout.hit_position(col).point.x;
 
-        let mut layout_line = TextLayoutLine {
+        let layout_line = TextLayoutLine {
             text: text_layout,
             extra_style: Vec::new(),
             whitespaces: None,
             indent,
             phantom_text,
         };
-        let extra_style = style.apply_layout_styles(&layout_line.text, &layout_line.phantom_text, 0);
-
-        layout_line.extra_style.clear();
-        layout_line.extra_style.extend(extra_style);
+        // todo 下划线等？
+        // let extra_style = style.apply_layout_styles(&layout_line.text, &layout_line.phantom_text, 0);
+        //
+        // layout_line.extra_style.clear();
+        // layout_line.extra_style.extend(extra_style);
 
 
         Arc::new(layout_line)
     }
 
     /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
-    fn before_phantom_col(&self, line: usize, col: usize) -> usize {
-        self.doc()
-            .before_phantom_col(self.id(), &self.es.get_untracked(), line, col)
+    fn before_phantom_col(&self, line: usize, col: usize) -> (usize, usize) {
+        self.new_text_layout(line).phantom_text.origin_position_of_final_col(col)
+        // self.doc()
+        //     .before_phantom_col(self.id(), &self.es.get_untracked(), line, col)
     }
 
     // fn has_multiline_phantom(&self) -> bool {

@@ -23,8 +23,7 @@ use floem_reactive::SignalGet;
 use lapce_xi_rope::Rope;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use floem_renderer::text::TextLayout;
-use crate::views::editor::layout::LineExtraStyle;
+use tracing::error;
 use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use super::{
@@ -145,11 +144,12 @@ pub trait Document: DocumentPhantom + Downcast {
             text: preedit.text,
             affinity: None,
             final_col: col,
-            col,
+            merge_col: col,
             font_size: None,
             fg: None,
             bg: None,
             under_line,
+            col,
         })
     }
 
@@ -207,25 +207,25 @@ impl_downcast!(Document);
 pub trait DocumentPhantom {
     fn phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextLine;
 
-    fn multi_phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextMultiLine {
-        crate::views::editor::phantom_text::PhantomTextMultiLine::new(self.phantom_text(edid, styling, line))
-    }
+    // fn multi_phantom_text(&self, _edid: EditorId, _styling: &EditorStyle, _line: usize) -> PhantomTextMultiLine {
+    //     todo!()
+    // }
 
 
-    /// Translate a column position into the position it would be before combining with
-    /// the phantom text.
-    ///
-    /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
-    fn before_phantom_col(
-        &self,
-        edid: EditorId,
-        styling: &EditorStyle,
-        line: usize,
-        col: usize,
-    ) -> usize {
-        let phantom = self.multi_phantom_text(edid, styling, line);
-        phantom.before_col(col)
-    }
+    // Translate a column position into the position it would be before combining with
+    // the phantom text.
+    //
+    // 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
+    // fn _before_phantom_col(
+    //     &self,
+    //     edid: EditorId,
+    //     styling: &EditorStyle,
+    //     line: usize,
+    //     col: usize,
+    // ) -> (usize, usize) {
+    //     let phantom = self.multi_phantom_text(edid, styling, line);
+    //     phantom.origin_position_of_final_col(col)
+    // }
 
     // fn has_multiline_phantom(&self, _edid: EditorId, _styling: &EditorStyle) -> bool {
     //     true
@@ -360,12 +360,12 @@ pub trait Styling {
     fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)>;
 
     /// todo ? 幽灵文本的样式
-    fn apply_layout_styles(
-        &self,
-        _layout: &TextLayout,
-        _phantom_text: &PhantomTextMultiLine,
-        _collapsed_line_col: usize,
-    ) -> Vec<LineExtraStyle>;
+    // fn apply_layout_styles(
+    //     &self,
+    //     _layout: &TextLayout,
+    //     _phantom_text: &PhantomTextMultiLine,
+    //     _collapsed_line_col: usize,
+    // ) -> Vec<LineExtraStyle>;
 
     /// Whether it should draw the cursor caret on the given line.
     /// Note that these are extra conditions on top of the typical hide cursor &
@@ -533,19 +533,23 @@ where
         self.doc.phantom_text(edid, styling, line)
     }
 
+    // fn multi_phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextMultiLine {
+    //     error!("todo multi_phantom_text");
+    //     crate::views::editor::phantom_text::PhantomTextMultiLine::new(self.phantom_text(edid, styling, line))
+    // }
     // fn has_multiline_phantom(&self, edid: EditorId, styling: &EditorStyle) -> bool {
     //     self.doc.has_multiline_phantom(edid, styling)
     // }
 
-    fn before_phantom_col(
-        &self,
-        edid: EditorId,
-        styling: &EditorStyle,
-        line: usize,
-        col: usize,
-    ) -> usize {
-        self.doc.before_phantom_col(edid, styling, line, col)
-    }
+    // fn _before_phantom_col(
+    //     &self,
+    //     edid: EditorId,
+    //     styling: &EditorStyle,
+    //     line: usize,
+    //     col: usize,
+    // ) -> (usize, usize) {
+    //     self.doc._before_phantom_col(edid, styling, line, col)
+    // }
 }
 impl<D, F> CommonAction for ExtCmdDocument<D, F>
 where
@@ -720,12 +724,12 @@ impl Styling for SimpleStyling {
     // ) {
     // }
 
-    fn apply_layout_styles(
-        &self, _layout: &TextLayout, _phantom_text: &PhantomTextMultiLine,
-        _collapsed_line_col: usize,
-    )-> Vec<LineExtraStyle> {
-    Vec::new()
-    }
+    // fn apply_layout_styles(
+    //     &self, _layout: &TextLayout, _phantom_text: &PhantomTextMultiLine,
+    //     _collapsed_line_col: usize,
+    // )-> Vec<LineExtraStyle> {
+    // Vec::new()
+    // }
 }
 
 #[derive(Default, Clone)]

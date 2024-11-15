@@ -349,7 +349,7 @@ fn move_up(
 
     let horiz =
         horiz.unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
-    let col = view.rvline_horiz_col(rvline, &horiz, mode != Mode::Normal);
+    let (line, col) = view.rvline_horiz_col(rvline, &horiz, mode != Mode::Normal);
 
     // TODO: this should maybe be doing `new_offset == info.interval.start`?
     *affinity = if col == 0 {
@@ -358,7 +358,7 @@ fn move_up(
         CursorAffinity::Backward
     };
 
-    let new_offset = view.offset_of_line_col(rvline.line, col);
+    let new_offset = view.offset_of_line_col(line, col);
 
     (new_offset, horiz)
 }
@@ -448,9 +448,9 @@ fn move_down(
     let horiz =
         horiz.unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
 
-    let col = view.rvline_horiz_col(info.rvline, &horiz, mode != Mode::Normal);
+    let (line, col) = view.rvline_horiz_col(info.rvline, &horiz, mode != Mode::Normal);
 
-    let new_offset = view.offset_of_line_col(info.rvline.line, col);
+    let new_offset = view.offset_of_line_col(line, col);
 
     *affinity = if new_offset == info.interval.start {
         // The column was zero so we shift it to be at the line itself.
@@ -557,7 +557,7 @@ fn to_line(
                 .x,
         )
     });
-    let col = view.line_horiz_col(line, &horiz, mode != Mode::Normal);
+    let (line, col) = view.line_horiz_col(line, &horiz, mode != Mode::Normal);
     let new_offset = rope_text.offset_of_line_col(line, col);
 
     (new_offset, horiz)
