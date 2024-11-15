@@ -20,10 +20,8 @@ use floem_reactive::{
 };
 use lapce_xi_rope::{Rope, RopeDelta};
 use smallvec::{smallvec, SmallVec};
-use tracing::error;
 
 use crate::keyboard::Modifiers;
-use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use super::{
     actions::{handle_command_default, CommonAction},
@@ -164,6 +162,10 @@ impl Document for TextDocument {
 
     fn cache_rev(&self) -> RwSignal<u64> {
         self.cache_rev
+    }
+
+    fn visual_line_of_line(&self, line: usize) -> usize {
+        line
     }
 
     fn preedit(&self) -> PreeditData {

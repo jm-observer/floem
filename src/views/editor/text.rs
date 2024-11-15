@@ -23,8 +23,6 @@ use floem_reactive::SignalGet;
 use lapce_xi_rope::Rope;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use tracing::error;
-use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use super::{
     actions::CommonAction,
@@ -100,6 +98,16 @@ pub trait Document: DocumentPhantom + Downcast {
     }
 
     fn cache_rev(&self) -> RwSignal<u64>;
+
+    /// 获取原始行的合并行。
+    /// 合并行 **2 |    if a.0 {...}
+    ///
+    /// 原始行2/3/4的合并行均为2
+    ///
+    /// **2 |    if a.0 {
+    /// **3 |        println!("");
+    /// **4 |    }
+    fn visual_line_of_line(&self, line:usize) -> usize;
 
     /// Find the next/previous offset of the match of the given character.  
     /// This is intended for use by the [Movement::NextUnmatched](floem_editor_core::movement::Movement::NextUnmatched) and
@@ -472,6 +480,10 @@ where
 
     fn cache_rev(&self) -> RwSignal<u64> {
         self.doc.cache_rev()
+    }
+
+    fn visual_line_of_line(&self, line: usize) -> usize {
+        line
     }
 
     fn find_unmatched(&self, offset: usize, previous: bool, ch: char) -> usize {

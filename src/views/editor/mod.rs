@@ -917,11 +917,11 @@ impl Editor {
         let index = if force_affinity {
             text_layout
                 .phantom_text
-                .col_after_force(col, affinity == CursorAffinity::Forward)
+                .col_after_force(line, col, affinity == CursorAffinity::Forward)
         } else {
             text_layout
                 .phantom_text
-                .col_after(col, affinity == CursorAffinity::Forward)
+                .col_after(line, col, affinity == CursorAffinity::Forward)
         };
         hit_position_aff(
             &text_layout.text,
@@ -1157,73 +1157,73 @@ impl Editor {
             .try_get_text_layout(cache_rev, self.config_id(), line)
     }
 
-    #[allow(dead_code)]
-    /// Create rendable whitespace layout by creating a new text layout
-    /// with invisible spaces and special utf8 characters that display
-    /// the different white space characters.
-    fn new_whitespace_layout(
-        line_content: &str,
-        text_layout: &TextLayout,
-        phantom: &PhantomTextMultiLine,
-        render_whitespace: RenderWhitespace,
-    ) -> Option<Vec<(char, (f64, f64))>> {
-        let mut render_leading = false;
-        let mut render_boundary = false;
-        let mut render_between = false;
-
-        // TODO: render whitespaces only on highlighted text
-        match render_whitespace {
-            RenderWhitespace::All => {
-                render_leading = true;
-                render_boundary = true;
-                render_between = true;
-            }
-            RenderWhitespace::Boundary => {
-                render_leading = true;
-                render_boundary = true;
-            }
-            RenderWhitespace::Trailing => {} // All configs include rendering trailing whitespace
-            RenderWhitespace::None => return None,
-        }
-
-        let mut whitespace_buffer = Vec::new();
-        let mut rendered_whitespaces: Vec<(char, (f64, f64))> = Vec::new();
-        let mut char_found = false;
-        let mut col = 0;
-        for c in line_content.chars() {
-            match c {
-                '\t' => {
-                    let col_left = phantom.col_after(col, true);
-                    let col_right = phantom.col_after(col + 1, false);
-                    let x0 = text_layout.hit_position(col_left).point.x;
-                    let x1 = text_layout.hit_position(col_right).point.x;
-                    whitespace_buffer.push(('\t', (x0, x1)));
-                }
-                ' ' => {
-                    let col_left = phantom.col_after(col, true);
-                    let col_right = phantom.col_after(col + 1, false);
-                    let x0 = text_layout.hit_position(col_left).point.x;
-                    let x1 = text_layout.hit_position(col_right).point.x;
-                    whitespace_buffer.push((' ', (x0, x1)));
-                }
-                _ => {
-                    if (char_found && render_between)
-                        || (char_found && render_boundary && whitespace_buffer.len() > 1)
-                        || (!char_found && render_leading)
-                    {
-                        rendered_whitespaces.extend(whitespace_buffer.iter());
-                    }
-
-                    char_found = true;
-                    whitespace_buffer.clear();
-                }
-            }
-            col += c.len_utf8();
-        }
-        rendered_whitespaces.extend(whitespace_buffer.iter());
-
-        Some(rendered_whitespaces)
-    }
+    // #[allow(dead_code)]
+    // /// Create rendable whitespace layout by creating a new text layout
+    // /// with invisible spaces and special utf8 characters that display
+    // /// the different white space characters.
+    // fn new_whitespace_layout(
+    //     line_content: &str,
+    //     text_layout: &TextLayout,
+    //     phantom: &PhantomTextMultiLine,
+    //     render_whitespace: RenderWhitespace,
+    // ) -> Option<Vec<(char, (f64, f64))>> {
+    //     let mut render_leading = false;
+    //     let mut render_boundary = false;
+    //     let mut render_between = false;
+    //
+    //     // TODO: render whitespaces only on highlighted text
+    //     match render_whitespace {
+    //         RenderWhitespace::All => {
+    //             render_leading = true;
+    //             render_boundary = true;
+    //             render_between = true;
+    //         }
+    //         RenderWhitespace::Boundary => {
+    //             render_leading = true;
+    //             render_boundary = true;
+    //         }
+    //         RenderWhitespace::Trailing => {} // All configs include rendering trailing whitespace
+    //         RenderWhitespace::None => return None,
+    //     }
+    //
+    //     let mut whitespace_buffer = Vec::new();
+    //     let mut rendered_whitespaces: Vec<(char, (f64, f64))> = Vec::new();
+    //     let mut char_found = false;
+    //     let mut col = 0;
+    //     for c in line_content.chars() {
+    //         match c {
+    //             '\t' => {
+    //                 let col_left = phantom.col_after(col, true);
+    //                 let col_right = phantom.col_after(col + 1, false);
+    //                 let x0 = text_layout.hit_position(col_left).point.x;
+    //                 let x1 = text_layout.hit_position(col_right).point.x;
+    //                 whitespace_buffer.push(('\t', (x0, x1)));
+    //             }
+    //             ' ' => {
+    //                 let col_left = phantom.col_after(col, true);
+    //                 let col_right = phantom.col_after(col + 1, false);
+    //                 let x0 = text_layout.hit_position(col_left).point.x;
+    //                 let x1 = text_layout.hit_position(col_right).point.x;
+    //                 whitespace_buffer.push((' ', (x0, x1)));
+    //             }
+    //             _ => {
+    //                 if (char_found && render_between)
+    //                     || (char_found && render_boundary && whitespace_buffer.len() > 1)
+    //                     || (!char_found && render_leading)
+    //                 {
+    //                     rendered_whitespaces.extend(whitespace_buffer.iter());
+    //                 }
+    //
+    //                 char_found = true;
+    //                 whitespace_buffer.clear();
+    //             }
+    //         }
+    //         col += c.len_utf8();
+    //     }
+    //     rendered_whitespaces.extend(whitespace_buffer.iter());
+    //
+    //     Some(rendered_whitespaces)
+    // }
 }
 
 // fn strip_suffix(line_content_original: &str) -> String {
@@ -1260,7 +1260,7 @@ impl TextLayoutProvider for Editor {
 
     fn new_text_layout(
         &self,
-        line: usize,
+        mut line: usize,
     ) -> Arc<TextLayoutLine> {
         // TODO: we could share text layouts between different editor views given some knowledge of
         // their wrapping
@@ -1268,6 +1268,7 @@ impl TextLayoutProvider for Editor {
         let text = self.rope_text();
         let style = self.style();
         let doc = self.doc();
+        line = doc.visual_line_of_line(line);
         let es = self.es.get_untracked();
 
         let mut line_content = String::new();
