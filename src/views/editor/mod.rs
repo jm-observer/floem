@@ -1,4 +1,3 @@
-use core::indent::IndentStyle;
 use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
@@ -15,12 +14,8 @@ use crate::{
     kurbo::{Point, Rect, Vec2},
     peniko::Color,
     pointer::{PointerButton, PointerInputEvent, PointerMoveEvent},
-    prop, prop_extractor,
     reactive::{batch, untrack, ReadSignal, RwSignal, Scope},
-    style::{CursorColor, StylePropValue, TextColor},
     text::{Attrs, AttrsList, LineHeightValue, TextLayout, Wrap},
-    view::{IntoView, View},
-    views::text,
 };
 use floem_editor_core::{
     buffer::rope_text::{RopeText, RopeTextVal},
@@ -48,17 +43,17 @@ pub mod text;
 pub mod text_document;
 pub mod view;
 pub mod visual_line;
+mod prop;
+pub use prop::*;
 
 pub use floem_editor_core as core;
-use peniko::Brush;
 use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use self::{
     command::Command,
     id::EditorId,
     layout::TextLayoutLine,
-    phantom_text::PhantomTextLine,
-    text::{Document, Preedit, PreeditData, RenderWhitespace, Styling, WrapMethod},
+    text::{Document, Preedit, PreeditData, Styling, WrapMethod},
     view::{LineInfo, ScreenLines, ScreenLinesBase},
     visual_line::{
         hit_position_aff, ConfigId, FontSizeCacheId, LayoutEvent, LineFontSizeProvider, Lines,
@@ -66,78 +61,6 @@ use self::{
     },
 };
 
-prop!(pub WrapProp: WrapMethod {} = WrapMethod::EditorWidth);
-impl StylePropValue for WrapMethod {
-    fn debug_view(&self) -> Option<Box<dyn View>> {
-        Some(crate::views::text(self).into_any())
-    }
-}
-prop!(pub CursorSurroundingLines: usize {} = 1);
-prop!(pub ScrollBeyondLastLine: bool {} = false);
-prop!(pub ShowIndentGuide: bool {} = false);
-prop!(pub Modal: bool {} = false);
-prop!(pub ModalRelativeLine: bool {} = false);
-prop!(pub SmartTab: bool {} = false);
-prop!(pub PhantomColor: Color {} = Color::DIM_GRAY);
-prop!(pub PlaceholderColor: Color {} = Color::DIM_GRAY);
-prop!(pub PreeditUnderlineColor: Color {} = Color::WHITE);
-prop!(pub RenderWhitespaceProp: RenderWhitespace {} = RenderWhitespace::None);
-impl StylePropValue for RenderWhitespace {
-    fn debug_view(&self) -> Option<Box<dyn View>> {
-        Some(crate::views::text(self).into_any())
-    }
-}
-prop!(pub IndentStyleProp: IndentStyle {} = IndentStyle::Spaces(4));
-impl StylePropValue for IndentStyle {
-    fn debug_view(&self) -> Option<Box<dyn View>> {
-        Some(text(self).into_any())
-    }
-}
-prop!(pub DropdownShadow: Option<Color> {} = None);
-prop!(pub Foreground: Color { inherited } = Color::rgb8(0x38, 0x3A, 0x42));
-prop!(pub Focus: Option<Color> {} = None);
-prop!(pub SelectionColor: Color {} = Color::BLACK.with_alpha_factor(0.5));
-prop!(pub CurrentLineColor: Option<Color> {  } = None);
-prop!(pub Link: Option<Color> {} = None);
-prop!(pub VisibleWhitespaceColor: Color {} = Color::TRANSPARENT);
-prop!(pub IndentGuideColor: Color {} = Color::TRANSPARENT);
-prop!(pub StickyHeaderBackground: Option<Color> {} = None);
-
-prop_extractor! {
-    pub EditorStyle {
-        pub text_color: TextColor,
-        pub phantom_color: PhantomColor,
-        pub placeholder_color: PlaceholderColor,
-        pub preedit_underline_color: PreeditUnderlineColor,
-        pub show_indent_guide: ShowIndentGuide,
-        pub modal: Modal,
-        // Whether line numbers are relative in modal mode
-        pub modal_relative_line: ModalRelativeLine,
-        // Whether to insert the indent that is detected for the file when a tab character
-        // is inputted.
-        pub smart_tab: SmartTab,
-        pub wrap_method: WrapProp,
-        pub cursor_surrounding_lines: CursorSurroundingLines,
-        pub render_whitespace: RenderWhitespaceProp,
-        pub indent_style: IndentStyleProp,
-        pub caret: CursorColor,
-        pub selection: SelectionColor,
-        pub current_line: CurrentLineColor,
-        pub visible_whitespace: VisibleWhitespaceColor,
-        pub indent_guide: IndentGuideColor,
-        pub scroll_beyond_last_line: ScrollBeyondLastLine,
-    }
-}
-impl EditorStyle {
-    fn ed_text_color(&self) -> Color {
-        self.text_color().unwrap_or(Color::BLACK)
-    }
-}
-impl EditorStyle {
-    pub fn ed_caret(&self) -> Brush {
-        self.caret()
-    }
-}
 
 pub(crate) const CHAR_WIDTH: f64 = 7.5;
 
@@ -687,10 +610,10 @@ impl Editor {
 
     // === Information ===
 
-    pub fn phantom_text(&self, line: usize) -> PhantomTextLine {
-        self.doc()
-            .phantom_text(self.id(), &self.es.get_untracked(), line)
-    }
+    // pub fn phantom_text(&self, line: usize) -> PhantomTextLine {
+    //     self.doc()
+    //         .phantom_text(self.id(), &self.es.get_untracked(), line)
+    // }
 
     pub fn line_height(&self, line: usize) -> f32 {
         self.style().line_height(self.id(), line)
@@ -707,17 +630,17 @@ impl Editor {
         self.lines.iter_vlines(self.text_prov(), backwards, start)
     }
 
-    /// Iterate over the visual lines in the view, starting at the given line and ending at the
-    /// given line. `start_line..end_line`
-    pub fn iter_vlines_over(
-        &self,
-        backwards: bool,
-        start: VLine,
-        end: VLine,
-    ) -> impl Iterator<Item = VLineInfo> + '_ {
-        self.lines
-            .iter_vlines_over(self.text_prov(), backwards, start, end)
-    }
+    // /// Iterate over the visual lines in the view, starting at the given line and ending at the
+    // /// given line. `start_line..end_line`
+    // pub fn iter_vlines_over(
+    //     &self,
+    //     backwards: bool,
+    //     start: VLine,
+    //     end: VLine,
+    // ) -> impl Iterator<Item = VLineInfo> + '_ {
+    //     self.lines
+    //         .iter_vlines_over(self.text_prov(), backwards, start, end)
+    // }
 
     /// Iterator over *relative* [`VLineInfo`]s, starting at the buffer line, `start_line`.  
     /// The `visual_line`s provided by this will start at 0 from your `start_line`.  
@@ -732,8 +655,8 @@ impl Editor {
     }
 
     /// Iterator over *relative* [`VLineInfo`]s, starting at the buffer line, `start_line` and
-    /// ending at `end_line`.  
-    /// `start_line..end_line`  
+    /// ending at `end_line`.
+    /// `start_line..end_line`
     /// This is preferable over `iter_lines` if you do not need to absolute visual line value.
     pub fn iter_rvlines_over(
         &self,
@@ -1130,16 +1053,7 @@ impl Editor {
     pub fn move_left(&self, offset: usize, mode: Mode, count: usize) -> usize {
         self.rope_text().move_left(offset, mode, count)
     }
-}
 
-impl std::fmt::Debug for Editor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Editor").field(&self.id).finish()
-    }
-}
-
-// Text layout creation
-impl Editor {
     // Get the text layout for a document line, creating it if needed.
     pub fn text_layout(&self, line: usize) -> Arc<TextLayoutLine> {
         self.text_layout_trigger(line, true)
@@ -1151,79 +1065,17 @@ impl Editor {
             .get_init_text_layout(cache_rev, self.config_id(), self, line, trigger)
     }
 
-    fn try_get_text_layout(&self, line: usize) -> Option<Arc<TextLayoutLine>> {
-        let cache_rev = self.doc().cache_rev().get_untracked();
-        self.lines
-            .try_get_text_layout(cache_rev, self.config_id(), line)
-    }
-
-    // #[allow(dead_code)]
-    // /// Create rendable whitespace layout by creating a new text layout
-    // /// with invisible spaces and special utf8 characters that display
-    // /// the different white space characters.
-    // fn new_whitespace_layout(
-    //     line_content: &str,
-    //     text_layout: &TextLayout,
-    //     phantom: &PhantomTextMultiLine,
-    //     render_whitespace: RenderWhitespace,
-    // ) -> Option<Vec<(char, (f64, f64))>> {
-    //     let mut render_leading = false;
-    //     let mut render_boundary = false;
-    //     let mut render_between = false;
-    //
-    //     // TODO: render whitespaces only on highlighted text
-    //     match render_whitespace {
-    //         RenderWhitespace::All => {
-    //             render_leading = true;
-    //             render_boundary = true;
-    //             render_between = true;
-    //         }
-    //         RenderWhitespace::Boundary => {
-    //             render_leading = true;
-    //             render_boundary = true;
-    //         }
-    //         RenderWhitespace::Trailing => {} // All configs include rendering trailing whitespace
-    //         RenderWhitespace::None => return None,
-    //     }
-    //
-    //     let mut whitespace_buffer = Vec::new();
-    //     let mut rendered_whitespaces: Vec<(char, (f64, f64))> = Vec::new();
-    //     let mut char_found = false;
-    //     let mut col = 0;
-    //     for c in line_content.chars() {
-    //         match c {
-    //             '\t' => {
-    //                 let col_left = phantom.col_after(col, true);
-    //                 let col_right = phantom.col_after(col + 1, false);
-    //                 let x0 = text_layout.hit_position(col_left).point.x;
-    //                 let x1 = text_layout.hit_position(col_right).point.x;
-    //                 whitespace_buffer.push(('\t', (x0, x1)));
-    //             }
-    //             ' ' => {
-    //                 let col_left = phantom.col_after(col, true);
-    //                 let col_right = phantom.col_after(col + 1, false);
-    //                 let x0 = text_layout.hit_position(col_left).point.x;
-    //                 let x1 = text_layout.hit_position(col_right).point.x;
-    //                 whitespace_buffer.push((' ', (x0, x1)));
-    //             }
-    //             _ => {
-    //                 if (char_found && render_between)
-    //                     || (char_found && render_boundary && whitespace_buffer.len() > 1)
-    //                     || (!char_found && render_leading)
-    //                 {
-    //                     rendered_whitespaces.extend(whitespace_buffer.iter());
-    //                 }
-    //
-    //                 char_found = true;
-    //                 whitespace_buffer.clear();
-    //             }
-    //         }
-    //         col += c.len_utf8();
-    //     }
-    //     rendered_whitespaces.extend(whitespace_buffer.iter());
-    //
-    //     Some(rendered_whitespaces)
+    // fn try_get_text_layout(&self, line: usize) -> Option<Arc<TextLayoutLine>> {
+    //     let cache_rev = self.doc().cache_rev().get_untracked();
+    //     self.lines
+    //         .try_get_text_layout(cache_rev, self.config_id(), line)
     // }
+}
+
+impl std::fmt::Debug for Editor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Editor").field(&self.id).finish()
+    }
 }
 
 // fn strip_suffix(line_content_original: &str) -> String {
