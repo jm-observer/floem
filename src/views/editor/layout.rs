@@ -138,4 +138,8 @@ impl TextLayoutLine {
             )
         })
     }
+
+    pub fn last_line(&self) -> usize {
+        self.phantom_text.last_line
+    }
 }

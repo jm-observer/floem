@@ -72,6 +72,7 @@ use floem_reactive::Scope;
 use floem_renderer::text::{HitPosition, LayoutGlyph, TextLayout};
 use lapce_xi_rope::{Interval, Rope};
 use peniko::kurbo::Point;
+use tracing::error;
 
 use super::{Editor, layout::TextLayoutLine, listener::Listener};
 
@@ -95,6 +96,8 @@ impl ResolvedWrap {
 /// A line within the editor view.
 ///
 /// This gives the absolute position of the visual line.
+///
+/// 视觉行。视觉行 >= 原始行（因为折叠）
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VLine(pub usize);
 impl VLine {
@@ -111,6 +114,8 @@ pub struct RVLine {
     /// 原始文本的行号，从0开始
     pub line: usize,
     /// The index of the actual visual line's layout
+    ///
+    /// 原始行因为宽度等原因，有多行。此参数为多行的行索引。
     pub line_index: usize,
 }
 impl RVLine {
@@ -298,7 +303,7 @@ pub struct Lines {
     text_layouts: Rc<RefCell<TextLayoutCache>>,
     wrap: Cell<ResolvedWrap>,
     font_size_cache_id: Cell<FontSizeCacheId>,
-    last_vline: Rc<Cell<Option<VLine>>>,
+    last_vline: Rc<Cell<Option<(VLine, RVLine)>>>,
     pub layout_event: Listener<LayoutEvent>,
 }
 impl Lines {
@@ -365,16 +370,15 @@ impl Lines {
         self.font_sizes.borrow().font_size(line)
     }
 
-    /// Get the last visual line of the file.
-    ///
-    /// Cached.
-    pub fn last_vline(&self, text_prov: &Editor) -> VLine {
+    fn last_vline_and_rvline(&self, text_prov: &Editor) -> (VLine, RVLine) {
         let current_id = self.font_sizes.borrow().cache_id();
         if current_id != self.font_size_cache_id.get() {
             self.last_vline.set(None);
             self.font_size_cache_id.set(current_id);
         }
 
+        let mut last_line = 0;
+        let mut last_line_index = 0;
         if let Some(last_vline) = self.last_vline.get() {
             last_vline
         } else {
@@ -389,13 +393,21 @@ impl Lines {
                 let mut soft_line_count = 0;
 
                 let layouts = self.text_layouts.borrow();
-                for i in 0..hard_line_count {
+                let mut i = 0;
+                while i < hard_line_count {
+                    last_line = i;
                     let font_size = self.font_size(i);
                     if let Some(text_layout) = layouts.get(font_size, i) {
                         let line_count = text_layout.line_count();
+                        last_line_index = line_count;
                         soft_line_count += line_count;
+                        i = text_layout.last_line() + 1;
                     } else {
+                        // ??
+                        error!("todo? layouts[{i}] is none");
                         soft_line_count += 1;
+                        last_line_index = 0;
+                        i += 1;
                     }
                 }
 
@@ -403,9 +415,17 @@ impl Lines {
             };
 
             let last_vline = line_count.saturating_sub(1);
-            self.last_vline.set(Some(VLine(last_vline)));
-            VLine(last_vline)
+            let vline = (VLine(last_vline), RVLine::new(last_line, last_line_index));
+            self.last_vline.set(Some(vline));
+            vline
         }
+    }
+
+    /// Get the last visual line of the file.
+    ///
+    /// Cached.
+    pub fn last_vline(&self, text_prov: &Editor) -> VLine {
+        self.last_vline_and_rvline(text_prov).0
     }
 
     /// Clear the cache for the last vline
@@ -417,18 +437,7 @@ impl Lines {
     ///
     /// Cheap, so not cached
     pub fn last_rvline(&self, text_prov: &Editor) -> RVLine {
-        let rope_text = text_prov.rope_text();
-        let last_line = rope_text.last_line();
-        let layouts = self.text_layouts.borrow();
-        let font_size = self.font_size(last_line);
-
-        if let Some(layout) = layouts.get(font_size, last_line) {
-            let line_count = layout.line_count();
-
-            RVLine::new(last_line, line_count - 1)
-        } else {
-            RVLine::new(last_line, 0)
-        }
+        self.last_vline_and_rvline(text_prov).1
     }
 
     /// 'len' version of [`Lines::last_vline`]
@@ -464,7 +473,6 @@ impl Lines {
             line,
             font_size,
             self.wrap.get(),
-            &self.last_vline,
         )
     }
 
@@ -580,55 +588,55 @@ impl Lines {
     }
 
     // TODO(minor): Get rid of the clone bound.
-    /// Initialize the text layouts as you iterate over them.
-    pub fn iter_vlines_init<'a>(
-        &'a self,
-        text_prov: &'a Editor,
-        cache_rev: u64,
-        config_id: ConfigId,
-        start: VLine,
-        trigger: bool,
-    ) -> impl Iterator<Item = VLineInfo> + 'a {
-        self.check_cache(cache_rev, config_id);
-
-        if start <= self.last_vline(text_prov) {
-            // We initialize the text layout for the line that start line is for
-            let (_, rvline) = find_vline_init_info(self, text_prov, start).unwrap();
-            self.get_init_text_layout(cache_rev, config_id, text_prov, rvline.line, trigger);
-            // If the start line was past the last vline then we don't need to initialize anything
-            // since it won't get anything.
-        }
-
-        let text_layouts = self.text_layouts.clone();
-        let font_sizes = self.font_sizes.clone();
-        let wrap = self.wrap.get();
-        let last_vline = self.last_vline.clone();
-        let layout_event = trigger.then_some(self.layout_event);
-        self.iter_vlines(text_prov, false, start)
-            .inspect(move |v| {
-                if v.is_first() {
-                    // For every (first) vline we initialize the next buffer line's text layout
-                    // This ensures it is ready for when re reach it.
-                    let next_line = v.rvline.line + 1;
-                    let font_size = font_sizes.borrow().font_size(next_line);
-                    // `init_iter_vlines` is the reason `get_init_text_layout` is split out.
-                    // Being split out lets us avoid attaching lifetimes to the iterator, since it
-                    // only uses Rc/Arcs it is given.
-                    // This is useful since `Lines` would be in a
-                    // `Rc<RefCell<_>>` which would make iterators with lifetimes referring to
-                    // `Lines` a pain.
-                    get_init_text_layout(
-                        &text_layouts,
-                        layout_event,
-                        text_prov,
-                        next_line,
-                        font_size,
-                        wrap,
-                        &last_vline,
-                    );
-                }
-            })
-    }
+    // Initialize the text layouts as you iterate over them.
+    // pub fn iter_vlines_init<'a>(
+    //     &'a self,
+    //     text_prov: &'a Editor,
+    //     cache_rev: u64,
+    //     config_id: ConfigId,
+    //     start: VLine,
+    //     trigger: bool,
+    // ) -> impl Iterator<Item = VLineInfo> + 'a {
+    //     self.check_cache(cache_rev, config_id);
+    //
+    //     if start <= self.last_vline(text_prov).0{
+    //         // We initialize the text layout for the line that start line is for
+    //         let (_, rvline) = find_vline_init_info(self, text_prov, start).unwrap();
+    //         self.get_init_text_layout(cache_rev, config_id, text_prov, rvline.line, trigger);
+    //         // If the start line was past the last vline then we don't need to initialize anything
+    //         // since it won't get anything.
+    //     }
+    //
+    //     let text_layouts = self.text_layouts.clone();
+    //     let font_sizes = self.font_sizes.clone();
+    //     let wrap = self.wrap.get();
+    //     let last_vline = self.last_vline.clone();
+    //     let layout_event = trigger.then_some(self.layout_event);
+    //     self.iter_vlines(text_prov, false, start)
+    //         .inspect(move |v| {
+    //             if v.is_first() {
+    //                 // For every (first) vline we initialize the next buffer line's text layout
+    //                 // This ensures it is ready for when re reach it.
+    //                 let next_line = v.rvline.line + 1;
+    //                 let font_size = font_sizes.borrow().font_size(next_line);
+    //                 // `init_iter_vlines` is the reason `get_init_text_layout` is split out.
+    //                 // Being split out lets us avoid attaching lifetimes to the iterator, since it
+    //                 // only uses Rc/Arcs it is given.
+    //                 // This is useful since `Lines` would be in a
+    //                 // `Rc<RefCell<_>>` which would make iterators with lifetimes referring to
+    //                 // `Lines` a pain.
+    //                 get_init_text_layout(
+    //                     &text_layouts,
+    //                     layout_event,
+    //                     text_prov,
+    //                     next_line,
+    //                     font_size,
+    //                     wrap,
+    //                     &last_vline,
+    //                 );
+    //             }
+    //         })
+    // }
 
     /// Iterator over [`VLineInfo`]s, starting at `start_line` and ending at `end_line`.
     /// `start_line..end_line`
@@ -637,18 +645,18 @@ impl Lines {
     ///
     /// `trigger` (default to true) decides whether the creation of the text layout should trigger
     /// the [`LayoutEvent::CreatedLayout`] event.
-    pub fn iter_vlines_init_over<'a>(
-        &'a self,
-        text_prov: &'a Editor,
-        cache_rev: u64,
-        config_id: ConfigId,
-        start: VLine,
-        end: VLine,
-        trigger: bool,
-    ) -> impl Iterator<Item = VLineInfo> + 'a {
-        self.iter_vlines_init(text_prov, cache_rev, config_id, start, trigger)
-            .take_while(move |info| info.vline < end)
-    }
+    // pub fn iter_vlines_init_over<'a>(
+    //     &'a self,
+    //     text_prov: &'a Editor,
+    //     cache_rev: u64,
+    //     config_id: ConfigId,
+    //     start: VLine,
+    //     end: VLine,
+    //     trigger: bool,
+    // ) -> impl Iterator<Item = VLineInfo> + 'a {
+    //     self.iter_vlines_init(text_prov, cache_rev, config_id, start, trigger)
+    //         .take_while(move |info| info.vline < end)
+    // }
 
     /// Iterator over *relative* [`VLineInfo`]s, starting at the rvline, `start_line` and
     /// ending at the buffer line `end_line`.
@@ -675,7 +683,6 @@ impl Lines {
         let text_layouts = self.text_layouts.clone();
         let font_sizes = self.font_sizes.clone();
         let wrap = self.wrap.get();
-        let last_vline = self.last_vline.clone();
         let layout_event = trigger.then_some(self.layout_event);
         self.iter_rvlines(text_prov.clone(), false, start)
             .inspect(move |v| {
@@ -696,7 +703,6 @@ impl Lines {
                         next_line,
                         font_size,
                         wrap,
-                        &last_vline,
                     );
                 }
             })
@@ -935,7 +941,6 @@ fn get_init_text_layout(
     line: usize,
     font_size: usize,
     _wrap: ResolvedWrap,
-    last_vline: &Cell<Option<VLine>>,
 ) -> Arc<TextLayoutLine> {
     // If we don't have a second layer of the hashmap initialized for this specific font size,
     // do it now
@@ -955,23 +960,8 @@ fn get_init_text_layout(
     // If there isn't an entry then we actually have to create it
     if !cache_exists {
         let text_layout = text_prov.new_text_layout(line);
-
         // Update last vline
-        if let Some(vline) = last_vline.get() {
-            let last_line = text_prov.rope_text().last_line();
-            if line <= last_line {
-                // We can get rid of the old line count and add our new count.
-                // This lets us typically avoid having to calculate the last visual line.
-                let vline = vline.get();
-                let new_vline = vline + (text_layout.line_count() - 1);
-
-                last_vline.set(Some(VLine(new_vline)));
-            }
-            // If the line is past the end of the file, then we don't need to update the last
-            // visual line. It is garbage.
-        }
-        // Otherwise last vline was already None.
-
+        text_prov.last_vline();
         {
             // Add the text layout to the cache.
             let mut cache = text_layouts.borrow_mut();
@@ -1233,6 +1223,7 @@ fn find_vline_of_line_forwards(
 /// phantom text.
 ///
 /// Returns `None` if the visual line is out of bounds.
+/// return Some(offset_of_line, RVLine)
 fn find_vline_init_info(
     lines: &Lines,
     text_prov: &Editor,
