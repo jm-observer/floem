@@ -490,7 +490,7 @@ impl PhantomTextLine {
 
 #[derive(Debug, Default, Clone)]
 pub struct PhantomTextMultiLine {
-    pub visual_line: usize,
+    pub line: usize,
     pub last_line: usize,
     // 所有合并在该行的原始行的总长度
     pub origin_text_len: usize,
@@ -517,7 +517,7 @@ impl PhantomTextMultiLine {
         let mut len_of_line = HashMap::new();
         len_of_line.insert(line.visual_line - 1, (line.origin_text_len, line.final_text_len));
         Self {
-            visual_line: line.visual_line,
+            line: line.visual_line - 1,
             last_line: line.visual_line - 1,
             origin_text_len: line.origin_text_len, final_text_len: line.final_text_len,
             len_of_line,
@@ -545,7 +545,7 @@ impl PhantomTextMultiLine {
         self.final_text_len
     }
     pub fn log(&self, _msg: &str) {
-        tracing::info!("{_msg} visual_line={} origin_text_len={} final_text_len={}", self.visual_line, self.origin_text_len, self.final_text_len);
+        tracing::info!("{_msg} line={} origin_text_len={} final_text_len={}", self.line, self.origin_text_len, self.final_text_len);
         for phantom in &self.text {
             phantom.log();
         }
@@ -563,7 +563,7 @@ impl PhantomTextMultiLine {
         phantom_color: Color,
     ) {
         if !self.text.is_empty() {
-            tracing::info!("add_phantom_style start visual_line={}", self.visual_line);
+            tracing::info!("add_phantom_style start line={}", self.line);
         }
         for phantom in &self.text {
             tracing::info!("{phantom:?}");
@@ -659,7 +659,7 @@ impl PhantomTextMultiLine {
         if let Some((origin_len, _)) = self.len_of_line.get(&line) {
             pre_col = pre_col.min(*origin_len - 1);
         }
-        let mut same_line = (self.visual_line - 1) == line;
+        let mut same_line = self.line == line;
         // let mut current_line = self.visual_line - 1;
         for (index, text) in self.text.iter().enumerate() {
             if !same_line {
@@ -705,10 +705,10 @@ impl PhantomTextMultiLine {
     /// return (line, index)
     pub fn origin_position_of_final_col(&self, col: usize) -> (usize, usize) {
         if self.text.is_empty() {
-            return (self.visual_line - 1, self.origin_text_len.min(col));
+            return (self.line, self.origin_text_len.min(col));
         };
         let text_iter = self.text.iter();
-        let mut line = self.visual_line - 1;
+        let mut line = self.line;
         let mut final_start = 0;
         let mut origin_start = 0;
         let col = col.min(self.final_text_len - 1);
@@ -757,7 +757,7 @@ impl PhantomTextMultiLine {
     ///
     pub fn offset_size_iter(&self) -> impl Iterator<Item = (usize, usize, (usize, usize), &PhantomText)> + '_ {
         let mut col_shift = 10usize;
-        let line = self.visual_line - 1;
+        let line = self.line;
         self.text.iter().map(move |phantom| {
             let rs = match phantom.kind {
                 PhantomTextKind::LineFoldedRang {
@@ -785,8 +785,8 @@ impl PhantomTextMultiLine {
                 }
             };
             tracing::debug!(
-                "visual_line={} offset={} len={} col={:?} text={} {:?}",
-                self.visual_line,
+                "line={} offset={} len={} col={:?} text={} {:?}",
+                self.line,
                 rs.0,
                 rs.1,
                 rs.2,
@@ -800,7 +800,7 @@ impl PhantomTextMultiLine {
     pub fn final_line_content(&self, origin: &str) -> String {
         let rs = combine_with_text(&self.text, self.origin_text_len, origin);
         if !self.text.is_empty() {
-            info!("visual_line={} {origin} {rs}", self.visual_line);
+            info!("line={} {origin} {rs}", self.line);
         }
         rs
     }
@@ -970,6 +970,15 @@ mod test {
     }
 
     #[test]
+    fn test_all() {
+        test_init();
+        test_merge();
+        check_origin_position_of_final_col();
+        check_col_at();
+        check_final_col_of_col();
+    }
+
+    #[test]
     fn test_init() {
 
         let line2 = init_folded_line(2, false);
@@ -1039,11 +1048,11 @@ mod test {
 
 #[test]
     fn check_origin_position_of_final_col() {
-    //     check_folded_origin_position_of_final_col();
-    // check_let_origin_position_of_final_col();
-    check_folded_origin_position_of_final_col_1();
+        _check_folded_origin_position_of_final_col();
+    _check_let_origin_position_of_final_col();
+    _check_folded_origin_position_of_final_col_1();
     }
-    fn check_let_origin_position_of_final_col() {
+    fn _check_let_origin_position_of_final_col() {
         // "0         10        20        30
         // "0123456789012345678901234567890123456789
         // "    let a = A;nr
@@ -1072,7 +1081,7 @@ mod test {
 
     }
 
-    fn check_folded_origin_position_of_final_col_1() {
+    fn _check_folded_origin_position_of_final_col_1() {
         //  "0         10        20        30
         //  "0123456789012345678901234567890123456789
         //  "    if true {nr"
@@ -1108,7 +1117,7 @@ mod test {
             assert_eq!(line.origin_position_of_final_col(26), (3, 13));
         }
     }
-    fn check_folded_origin_position_of_final_col() {
+    fn _check_folded_origin_position_of_final_col() {
         //  "0         10        20        30
         //  "0123456789012345678901234567890123456789
         //  "    }nr"
@@ -1336,7 +1345,7 @@ mod test {
     }
 
     fn print_lines(lines: &PhantomTextMultiLine) {
-        println!("visual_line={} origin_text_len={} final_text_len={} len_of_line={:?}", lines.visual_line, lines.origin_text_len, lines.final_text_len, lines.len_of_line);
+        println!("line={} origin_text_len={} final_text_len={} len_of_line={:?}", lines.line, lines.origin_text_len, lines.final_text_len, lines.len_of_line);
         for text in &lines.text {
             println!("{:?} line={} col={} merge_col={} final_col={} text={} text.len()={}", text.kind, text.line, text.col, text.merge_col, text.final_col, text.text, text.text.len());
         }
