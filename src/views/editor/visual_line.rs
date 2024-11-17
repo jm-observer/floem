@@ -74,7 +74,7 @@ use lapce_xi_rope::{Interval, Rope};
 use peniko::kurbo::Point;
 use tracing::error;
 
-use super::{Editor, layout::TextLayoutLine, listener::Listener};
+use super::{Editor, EditorFontSizes, layout::TextLayoutLine, listener::Listener};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResolvedWrap {
@@ -159,9 +159,9 @@ pub struct TextLayoutCache {
     /// where the font-size can rapidly change.
     ///
     /// It would also be useful for a prospective minimap feature.
-    pub layouts: Layouts,
+    layouts: Layouts,
     /// The maximum width seen so far, used to determine if we need to show horizontal scrollbar
-    pub max_width: f64,
+    max_width: f64,
 }
 impl TextLayoutCache {
     pub fn clear(&mut self, cache_rev: u64, config_id: Option<ConfigId>) {
@@ -185,11 +185,11 @@ impl TextLayoutCache {
         self.layouts.get(&font_size).and_then(|c| c.get(&line))
     }
 
-    pub fn get_mut(&mut self, font_size: usize, line: usize) -> Option<&mut Arc<TextLayoutLine>> {
-        self.layouts
-            .get_mut(&font_size)
-            .and_then(|c| c.get_mut(&line))
-    }
+    // pub fn get_mut(&mut self, font_size: usize, line: usize) -> Option<&mut Arc<TextLayoutLine>> {
+    //     self.layouts
+    //         .get_mut(&font_size)
+    //         .and_then(|c| c.get_mut(&line))
+    // }
 
     /// Get the (start, end) columns of the (line, line_index)
     pub fn get_layout_col(
@@ -263,20 +263,20 @@ pub trait TextLayoutProvider {
 // }
 
 pub type FontSizeCacheId = u64;
-pub trait LineFontSizeProvider {
-    /// Get the 'general' font size for a specific buffer line.
-    ///
-    /// This is typically the editor font size.
-    ///
-    /// There might be alternate font-sizes within the line, like for phantom text, but those are
-    /// not considered here.
-    fn font_size(&self, line: usize) -> usize;
-
-    /// An identifier used to mark when the font size info has changed.
-    ///
-    /// This lets us update information.
-    fn cache_id(&self) -> FontSizeCacheId;
-}
+// pub trait LineFontSizeProvider {
+//     /// Get the 'general' font size for a specific buffer line.
+//     ///
+//     /// This is typically the editor font size.
+//     ///
+//     /// There might be alternate font-sizes within the line, like for phantom text, but those are
+//     /// not considered here.
+//     fn font_size(&self, line: usize) -> usize;
+//
+//     /// An identifier used to mark when the font size info has changed.
+//     ///
+//     /// This lets us update information.
+//     fn cache_id(&self) -> FontSizeCacheId;
+// }
 
 /// Layout events
 ///
@@ -299,7 +299,7 @@ pub struct Lines {
     /// An `Arc<RefCell<_>>` has the issue that with a `dyn` it can't know they're the same size
     /// if you were to assign. So this allows us to swap out the `Arc`, though it does mean that
     /// the other holders of the `Arc` don't get the new version. That is fine currently.
-    pub font_sizes: RefCell<Rc<dyn LineFontSizeProvider>>,
+    pub font_sizes: RefCell<Rc<EditorFontSizes>>,
     text_layouts: Rc<RefCell<TextLayoutCache>>,
     wrap: Cell<ResolvedWrap>,
     font_size_cache_id: Cell<FontSizeCacheId>,
@@ -307,7 +307,7 @@ pub struct Lines {
     pub layout_event: Listener<LayoutEvent>,
 }
 impl Lines {
-    pub fn new(cx: Scope, font_sizes: RefCell<Rc<dyn LineFontSizeProvider>>) -> Lines {
+    pub fn new(cx: Scope, font_sizes: RefCell<Rc<EditorFontSizes>>) -> Lines {
         let id = font_sizes.borrow().cache_id();
         Lines {
             font_sizes,
@@ -1075,7 +1075,7 @@ fn find_rvline_of_offset(
                     // We have to get rvline info for that rvline, so we can get the last line index
                     // This should always have at least one rvline in it.
                     let font_sizes = lines.font_sizes.borrow();
-                    let (prev, _) = prev_rvline(&layouts, text_prov, &**font_sizes, rv)?;
+                    let (prev, _) = prev_rvline(&layouts, text_prov, &font_sizes, rv)?;
                     return Some(prev);
                 }
             }
@@ -1650,7 +1650,7 @@ impl Iterator for VisualLines {
 ///
 /// This only considers wrapped and phantom text lines that have been rendered into a text layout.
 struct VisualLinesRelative {
-    font_sizes: Rc<dyn LineFontSizeProvider>,
+    font_sizes: Rc<EditorFontSizes>,
     text_layouts: Rc<RefCell<TextLayoutCache>>,
     text_prov: Editor,
 
@@ -1728,7 +1728,7 @@ impl Iterator for VisualLinesRelative {
             let v = shift_rvline(
                 &layouts,
                 &self.text_prov,
-                &*self.font_sizes,
+                &self.font_sizes,
                 self.rvline,
                 self.backwards,
                 self.linear,
@@ -1794,7 +1794,7 @@ fn end_of_rvline(
 fn shift_rvline(
     layouts: &TextLayoutCache,
     text_prov: &Editor,
-    font_sizes: &dyn LineFontSizeProvider,
+    font_sizes: &EditorFontSizes,
     vline: RVLine,
     backwards: bool,
     linear: bool,
@@ -1888,7 +1888,7 @@ fn next_rvline(
 fn prev_rvline(
     layouts: &TextLayoutCache,
     text_prov: &Editor,
-    font_sizes: &dyn LineFontSizeProvider,
+    font_sizes: &EditorFontSizes,
     RVLine { line, line_index }: RVLine,
 ) -> Option<(RVLine, usize)> {
     let rope_text = text_prov.rope_text();

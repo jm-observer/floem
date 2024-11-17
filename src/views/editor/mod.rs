@@ -44,6 +44,8 @@ pub mod text_document;
 pub mod view;
 pub mod visual_line;
 mod prop;
+mod lines;
+
 pub use prop::*;
 
 pub use floem_editor_core as core;
@@ -56,7 +58,7 @@ use self::{
     text::{Document, Preedit, PreeditData, Styling, WrapMethod},
     view::{LineInfo, ScreenLines, ScreenLinesBase},
     visual_line::{
-        hit_position_aff, ConfigId, FontSizeCacheId, LayoutEvent, LineFontSizeProvider, Lines,
+        hit_position_aff, ConfigId, FontSizeCacheId, LayoutEvent, Lines,
         RVLine, ResolvedWrap, TextLayoutProvider, VLine, VLineInfo,
     },
 };
@@ -1282,12 +1284,12 @@ impl TextLayoutProvider for Editor {
     // }
 }
 
-struct EditorFontSizes {
+pub struct EditorFontSizes {
     id: EditorId,
     style: ReadSignal<Rc<dyn Styling>>,
     doc: ReadSignal<Rc<dyn Document>>,
 }
-impl LineFontSizeProvider for EditorFontSizes {
+impl EditorFontSizes {
     fn font_size(&self, line: usize) -> usize {
         self.style
             .with_untracked(|style| style.font_size(self.id, line))
