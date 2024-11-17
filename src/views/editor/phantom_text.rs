@@ -121,7 +121,7 @@ pub enum PhantomTextKind {
 /// resulting coordinate after the phantom text is combined with the line's real content.
 #[derive(Debug, Default, Clone)]
 pub struct PhantomTextLine {
-    visual_line: usize,
+    line: usize,
     // 原文本的长度，包括换行符等，原始单行
     origin_text_len: usize,
     // 最后展现的长度，包括幽灵文本、换行符.
@@ -142,14 +142,14 @@ impl PhantomTextLine {
         });
         let line = Self {
             final_text_len: origin_text_len,
-            visual_line: line + 1,
+            line,
             origin_text_len, text
         };
         line.update()
     }
 
     pub fn log(&self) {
-        tracing::info!("PhantomTextLine visual_line={} origin_text_len={}", self.visual_line, self.origin_text_len);
+        tracing::info!("PhantomTextLine line={} origin_text_len={}", self.line, self.origin_text_len);
         for phantom in &self.text {
             phantom.log();
         }
@@ -515,10 +515,10 @@ impl PhantomTextMultiLine {
             }
         });
         let mut len_of_line = HashMap::new();
-        len_of_line.insert(line.visual_line - 1, (line.origin_text_len, line.final_text_len));
+        len_of_line.insert(line.line, (line.origin_text_len, line.final_text_len));
         Self {
-            line: line.visual_line - 1,
-            last_line: line.visual_line - 1,
+            line: line.line,
+            last_line: line.line,
             origin_text_len: line.origin_text_len, final_text_len: line.final_text_len,
             len_of_line,
             text,
@@ -527,7 +527,7 @@ impl PhantomTextMultiLine {
     }
 
     pub fn merge(&mut self, line: PhantomTextLine) {
-        self.len_of_line.insert(line.visual_line - 1, (line.origin_text_len, line.final_text_len));
+        self.len_of_line.insert(line.line, (line.origin_text_len, line.final_text_len));
         let origin_text_len = self.origin_text_len;
         self.origin_text_len += line.origin_text_len;
         let final_text_len = self.final_text_len;
@@ -537,7 +537,7 @@ impl PhantomTextMultiLine {
             phantom.final_col += final_text_len;
             self.text.push(phantom);
         }
-        self.last_line = line.visual_line - 1;
+        self.last_line = line.line;
         self.lines.push(line);
     }
 
@@ -1353,7 +1353,7 @@ mod test {
     }
 
     fn print_line(lines: &PhantomTextLine) {
-        println!("visual_line={} origin_text_len={} final_text_len={}", lines.visual_line, lines.origin_text_len, lines.final_text_len);
+        println!("line={} origin_text_len={} final_text_len={}", lines.line, lines.origin_text_len, lines.final_text_len);
         for text in &lines.text {
             println!("{:?} line={} col={} merge_col={} final_col={} text={} text.len()={}", text.kind, text.line, text.col, text.merge_col, text.final_col, text.text, text.text.len());
         }
