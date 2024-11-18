@@ -7,17 +7,17 @@ use floem_editor_core::{
     mode::{Mode, MotionMode, VisualMode},
     movement::{LinePosition, Movement},
     register::Register,
-    selection::{SelRegion, Selection},
+    selection::{Selection, SelRegion},
     soft_tab::{snap_to_soft_tab, SnapDirection},
 };
 
 use super::{
     actions::CommonAction,
-    visual_line::{RVLine, VLineInfo},
     Editor,
+    visual_line::RVLine,
 };
 
-/// Move a selection region by a given movement.  
+/// Move a selection region by a given movement.
 /// Much of the time, this will just be a matter of moving the cursor, but
 /// some movements may depend on the current selection.
 fn move_region(
@@ -254,113 +254,117 @@ fn move_left(
 /// Move the offset to the right by `count` amount.
 /// If `soft_tab_width` is `Some` (and greater than 1) then the offset will snap to the soft tab.
 fn move_right(
-    view: &Editor,
-    offset: usize,
-    affinity: &mut CursorAffinity,
-    mode: Mode,
-    count: usize,
+    _view: &Editor,
+    _offset: usize,
+    _affinity: &mut CursorAffinity,
+    _mode: Mode,
+    _count: usize,
 ) -> usize {
-    let rope_text = view.rope_text();
-    let mut new_offset = rope_text.move_right(offset, mode, count);
+    todo!()
+    // let rope_text = view.rope_text();
+    // let mut new_offset = rope_text.move_right(offset, mode, count);
+    //
+    // if let Some(soft_tab_width) = atomic_soft_tab_width_for_offset(view, offset) {
+    //     if soft_tab_width > 1 {
+    //         new_offset = snap_to_soft_tab(
+    //             rope_text.text(),
+    //             new_offset,
+    //             SnapDirection::Right,
+    //             soft_tab_width,
+    //         );
+    //     }
+    // }
 
-    if let Some(soft_tab_width) = atomic_soft_tab_width_for_offset(view, offset) {
-        if soft_tab_width > 1 {
-            new_offset = snap_to_soft_tab(
-                rope_text.text(),
-                new_offset,
-                SnapDirection::Right,
-                soft_tab_width,
-            );
-        }
-    }
 
-    let (rvline, col) = view.rvline_col_of_offset(offset, *affinity);
-    let info = view.rvline_info(rvline);
+    // let (rvline, _, col) = view.visual_line_of_offset(offset, *affinity);
+    // let info = view.rvline_info(rvline);
+    //
+    // *affinity = if col == info.last_col(view.text_prov(), false) {
+    //     CursorAffinity::Forward
+    // } else {
+    //     CursorAffinity::Backward
+    // };
 
-    *affinity = if col == info.last_col(view.text_prov(), false) {
-        CursorAffinity::Forward
-    } else {
-        CursorAffinity::Backward
-    };
-
-    new_offset
+    // new_offset
 }
 
-fn find_prev_rvline(view: &Editor, start: RVLine, count: usize) -> Option<RVLine> {
+fn find_prev_rvline(_view: &Editor, start: RVLine, count: usize) -> Option<RVLine> {
     if count == 0 {
         return Some(start);
     }
-
+    todo!()
     // We can't just directly subtract count because of multi-line phantom text.
     // As just subtracting count wouldn't properly skip over the phantom lines.
     // So we have to search backwards for the previous line that has real content.
-    let mut info = None;
-    let mut found_count = 0;
-    for prev_info in view.iter_rvlines(true, start).skip(1) {
-        if prev_info.is_empty_phantom() {
-            // We skip any phantom text lines in our consideration
-            continue;
-        }
-
-        // Otherwise we found a real line.
-        found_count += 1;
-
-        if found_count == count {
-            // If we've completed all the count instances then we're done
-            info = Some(prev_info);
-            break;
-        }
-        // Otherwise we continue on to find the previous line with content before that.
-    }
-
-    info.map(|info| info.rvline)
+    // let mut info = None;
+    // let mut found_count = 0;
+    // for prev_info in view.iter_rvlines(true, start).skip(1) {
+    //     if prev_info.is_empty_phantom() {
+    //         // We skip any phantom text lines in our consideration
+    //         continue;
+    //     }
+    //
+    //     // Otherwise we found a real line.
+    //     found_count += 1;
+    //
+    //     if found_count == count {
+    //         // If we've completed all the count instances then we're done
+    //         info = Some(prev_info);
+    //         break;
+    //     }
+    //     // Otherwise we continue on to find the previous line with content before that.
+    // }
+    //
+    // info.map(|info| info.rvline)
 }
 
 /// Move the offset up by `count` amount.  
 /// `count` may be zero, because moving up in a selection just jumps to the start of the selection.
 fn move_up(
-    view: &Editor,
-    offset: usize,
-    affinity: &mut CursorAffinity,
-    horiz: Option<ColPosition>,
-    mode: Mode,
-    count: usize,
+    _view: &Editor,
+    _offset: usize,
+    _affinity: &mut CursorAffinity,
+    _horiz: Option<ColPosition>,
+    _mode: Mode,
+    _count: usize,
 ) -> (usize, ColPosition) {
-    let rvline = view.rvline_of_offset(offset, *affinity);
-    if rvline.line == 0 && rvline.line_index == 0 {
-        // Zeroth line
-        let horiz = horiz
-            .unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
-
-        *affinity = CursorAffinity::Backward;
-
-        return (0, horiz);
-    }
-
-    let Some(rvline) = find_prev_rvline(view, rvline, count) else {
-        // Zeroth line
-        let horiz = horiz
-            .unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
-
-        *affinity = CursorAffinity::Backward;
-
-        return (0, horiz);
-    };
-
-    let horiz =
-        horiz.unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
-    let (line, col) = view.rvline_horiz_col(rvline, &horiz, mode != Mode::Normal);
-
-    // TODO: this should maybe be doing `new_offset == info.interval.start`?
-    *affinity = if col == 0 {
-        CursorAffinity::Forward
-    } else {
-        CursorAffinity::Backward
-    };
-
-    let new_offset = view.offset_of_line_col(line, col);
-
-    (new_offset, horiz)
+    todo!()
+    // let (rvline, ..) = view.visual_line_of_offset(offset, *affinity);
+    // let folded_line = view.folded_line_of_offset(offset, *affinity);
+    // if rvline.line == 0 && rvline.line_index == 0 {
+    //     // Zeroth line
+    //     let horiz = horiz
+    //         .unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
+    //
+    //     *affinity = CursorAffinity::Backward;
+    //
+    //     return (0, horiz);
+    // }
+    //
+    // let Some(rvline) = find_prev_rvline(view, rvline, count) else {
+    //     // Zeroth line
+    //     let horiz = horiz
+    //         .unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
+    //
+    //     *affinity = CursorAffinity::Backward;
+    //
+    //     return (0, horiz);
+    // };
+    //
+    // let horiz =
+    //     horiz.unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
+    // let (line, col) = view.rvline_horiz_col(rvline, &horiz, mode != Mode::Normal);
+    //
+    // // TODO: this should maybe be doing `new_offset == info.interval.start`?
+    // *affinity = if col == 0 {
+    //     CursorAffinity::Forward
+    // } else {
+    //     CursorAffinity::Backward
+    // };
+    //
+    // let new_offset = view.offset_of_line_col(line, col);
+    //
+    // (new_offset, horiz)
 }
 
 /// Move down for when the cursor is on the last visual line.
@@ -385,83 +389,84 @@ fn move_down_last_rvline(
     (new_offset, horiz)
 }
 
-fn find_next_rvline_info(
-    view: &Editor,
-    offset: usize,
-    start: RVLine,
-    count: usize,
-) -> Option<VLineInfo<()>> {
-    // We can't just directly add count because of multi-line phantom text.
-    // These lines are 'not there' and also don't have any position that can be moved into
-    // (unlike phantom text that is mixed with real text)
-    // So we have to search forward for the next line that has real content.
-    // The typical iteration count for this is 1, and even after that it is usually only a handful.
-    let mut found_count = 0;
-    for next_info in view.iter_rvlines(false, start) {
-        if count == 0 {
-            return Some(next_info);
-        }
-
-        if next_info.is_empty_phantom() {
-            // We skip any phantom text lines in our consideration
-            // TODO: Would this skip over an empty line?
-            continue;
-        }
-
-        if next_info.interval.start <= offset {
-            // If we're on or before our current visual line then we skip it
-            continue;
-        }
-
-        // Otherwise we found a real line.
-        found_count += 1;
-
-        if found_count == count {
-            // If we've completed all the count instances then we're done
-            return Some(next_info);
-        }
-        // Otherwise we continue on to find the next line with content after that.
-    }
-
-    None
-}
+// fn find_next_rvline_info(
+//     view: &Editor,
+//     offset: usize,
+//     start: RVLine,
+//     count: usize,
+// ) -> Option<VLineInfo<()>> {
+//     // We can't just directly add count because of multi-line phantom text.
+//     // These lines are 'not there' and also don't have any position that can be moved into
+//     // (unlike phantom text that is mixed with real text)
+//     // So we have to search forward for the next line that has real content.
+//     // The typical iteration count for this is 1, and even after that it is usually only a handful.
+//     let mut found_count = 0;
+//     for next_info in view.iter_rvlines(false, start) {
+//         if count == 0 {
+//             return Some(next_info);
+//         }
+//
+//         if next_info.is_empty_phantom() {
+//             // We skip any phantom text lines in our consideration
+//             // TODO: Would this skip over an empty line?
+//             continue;
+//         }
+//
+//         if next_info.interval.start <= offset {
+//             // If we're on or before our current visual line then we skip it
+//             continue;
+//         }
+//
+//         // Otherwise we found a real line.
+//         found_count += 1;
+//
+//         if found_count == count {
+//             // If we've completed all the count instances then we're done
+//             return Some(next_info);
+//         }
+//         // Otherwise we continue on to find the next line with content after that.
+//     }
+//
+//     None
+// }
 
 /// Move the offset down by `count` amount.  
 /// `count` may be zero, because moving down in a selection just jumps to the end of the selection.
 fn move_down(
-    view: &Editor,
-    offset: usize,
-    affinity: &mut CursorAffinity,
-    horiz: Option<ColPosition>,
-    mode: Mode,
-    count: usize,
+    _view: &Editor,
+    _offset: usize,
+    _affinity: &mut CursorAffinity,
+    _horiz: Option<ColPosition>,
+    _mode: Mode,
+    _count: usize,
 ) -> (usize, ColPosition) {
-    let rvline = view.rvline_of_offset(offset, *affinity);
-
-    let Some(info) = find_next_rvline_info(view, offset, rvline, count) else {
-        // There was no next entry, this typically means that we would go past the end if we went
-        // further
-        return move_down_last_rvline(view, offset, affinity, horiz, mode);
-    };
-
-    // TODO(minor): is this the right affinity?
-    let horiz =
-        horiz.unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
-
-    let (line, col) = view.rvline_horiz_col(info.rvline, &horiz, mode != Mode::Normal);
-
-    let new_offset = view.offset_of_line_col(line, col);
-
-    *affinity = if new_offset == info.interval.start {
-        // The column was zero so we shift it to be at the line itself.
-        // This lets us move down to an empty - for example - next line and appear at the
-        // start of that line without coinciding with the offset at the end of the previous line.
-        CursorAffinity::Forward
-    } else {
-        CursorAffinity::Backward
-    };
-
-    (new_offset, horiz)
+    todo!()
+    // let (rvline, ..) = view.visual_line_of_offset(offset, *affinity);
+    //
+    // let Some(info) = find_next_rvline_info(view, offset, rvline, count) else {
+    //     // There was no next entry, this typically means that we would go past the end if we went
+    //     // further
+    //     return move_down_last_rvline(view, offset, affinity, horiz, mode);
+    // };
+    //
+    // // TODO(minor): is this the right affinity?
+    // let horiz =
+    //     horiz.unwrap_or_else(|| ColPosition::Col(view.line_point_of_offset(offset, *affinity).x));
+    //
+    // let (line, col) = view.rvline_horiz_col(info.rvline, &horiz, mode != Mode::Normal);
+    //
+    // let new_offset = view.offset_of_line_col(line, col);
+    //
+    // *affinity = if new_offset == info.interval.start {
+    //     // The column was zero so we shift it to be at the line itself.
+    //     // This lets us move down to an empty - for example - next line and appear at the
+    //     // start of that line without coinciding with the offset at the end of the previous line.
+    //     CursorAffinity::Forward
+    // } else {
+    //     CursorAffinity::Backward
+    // };
+    //
+    // (new_offset, horiz)
 }
 
 fn document_end(
@@ -507,8 +512,9 @@ fn start_of_line(
     affinity: &mut CursorAffinity,
     offset: usize,
 ) -> (usize, ColPosition) {
-    let rvline = view.rvline_of_offset(offset, *affinity);
-    let new_offset = view.offset_of_rvline(rvline);
+    let folded_line = view.folded_line_of_offset(offset, *affinity);
+    let new_offset = view.offset_of_line(folded_line.origin_line_start);
+    // let new_offset = view.offset_of_rvline(rvline);
     // TODO(minor): if the line has zero characters, it should probably be forward affinity but
     // other cases might be better as backwards?
     *affinity = CursorAffinity::Forward;
@@ -530,7 +536,7 @@ fn end_of_line(
         CursorAffinity::Backward
     };
 
-    let new_offset = view.offset_of_line_col(info.rvline.line, new_col);
+    let new_offset = view.offset_of_line_col(info.origin_line, new_col);
 
     (new_offset, ColPosition::End)
 }
@@ -779,14 +785,15 @@ pub fn do_motion_mode(
 mod tests {
     use std::rc::Rc;
 
+    use lapce_xi_rope::Rope;
+    use peniko::kurbo::{Rect, Size};
+
     use floem_editor_core::{
         buffer::rope_text::{RopeText, RopeTextVal},
         cursor::{ColPosition, CursorAffinity},
         mode::Mode,
     };
     use floem_reactive::{Scope, SignalUpdate};
-    use lapce_xi_rope::Rope;
-    use peniko::kurbo::{Rect, Size};
 
     use crate::views::editor::{
         movement::{correct_crlf, end_of_line, move_down, move_up},

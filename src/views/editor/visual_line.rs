@@ -584,7 +584,7 @@ impl Lines {
         end_line: usize,
     ) -> impl Iterator<Item = VLineInfo<()>> {
         self.iter_rvlines(text_prov.clone(), backwards, start)
-            .take_while(move |info| info.rvline.line < end_line)
+            .take_while(move |info| info.origin_line < end_line)
     }
 
     // TODO(minor): Get rid of the clone bound.
@@ -689,7 +689,7 @@ impl Lines {
                 if v.is_first() {
                     // For every (first) vline we initialize the next buffer line's text layout
                     // This ensures it is ready for when re reach it.
-                    let next_line = v.rvline.line + 1;
+                    let next_line = v.origin_line + 1;
                     let font_size = font_sizes.borrow().font_size(next_line);
                     // `init_iter_lines` is the reason `get_init_text_layout` is split out.
                     // Being split out lets us avoid attaching lifetimes to the iterator, since it
@@ -1474,8 +1474,9 @@ pub struct VLineInfo<L = VLine> {
     /// Note that this is obviously not including phantom text.
     pub interval: Interval,
     /// The total number of lines in this buffer line. Always at least 1.
-    pub line_count: usize,
+    // pub line_count: usize,
     pub rvline: RVLine,
+    pub origin_line: usize,
     /// The actual visual line this is for.
     ///
     /// For relative visual line iteration, this is empty.
@@ -1485,18 +1486,19 @@ impl<L: std::fmt::Debug> VLineInfo<L> {
     /// Create a new instance of `VLineInfo`
     ///
     /// This should rarely be used directly.
-    pub fn new<I: Into<Interval>>(iv: I, rvline: RVLine, line_count: usize, vline: L) -> Self {
+    pub fn new<I: Into<Interval>>(iv: I, rvline: RVLine, vline: L) -> Self {
         Self {
             interval: iv.into(),
-            line_count,
+            origin_line: rvline.line,
+            // line_count,
             rvline,
             vline,
         }
     }
 
-    pub fn to_blank(&self) -> VLineInfo<()> {
-        VLineInfo::new(self.interval, self.rvline, self.line_count, ())
-    }
+    // pub fn to_blank(&self) -> VLineInfo<()> {
+    //     VLineInfo::new(self.interval, self.rvline, self.line_count, ())
+    // }
 
     /// Check whether the interval is empty.
     ///
@@ -1520,7 +1522,7 @@ impl<L: std::fmt::Debug> VLineInfo<L> {
     /// Is this the last visual line for the relevant buffer line?
     pub fn is_last(&self, text_prov: &Editor) -> bool {
         let rope_text = text_prov.rope_text();
-        let line_end = rope_text.line_end_offset(self.rvline.line, false);
+        let line_end = rope_text.line_end_offset(self.origin_line, false);
         let vline_end = self.line_end_offset(text_prov, false);
 
         line_end == vline_end
@@ -1529,7 +1531,7 @@ impl<L: std::fmt::Debug> VLineInfo<L> {
     /// Get the first column of the overall line of the visual line
     pub fn first_col(&self, text_prov: &Editor) -> usize {
         let line_start = self.interval.start;
-        let start_offset = text_prov.text().offset_of_line(self.rvline.line);
+        let start_offset = text_prov.text().offset_of_line(self.origin_line);
         line_start - start_offset
     }
 
@@ -1550,7 +1552,7 @@ impl<L: std::fmt::Debug> VLineInfo<L> {
     /// ```
     pub fn last_col(&self, text_prov: &Editor, caret: bool) -> usize {
         let vline_end = self.interval.end;
-        let start_offset = text_prov.text().offset_of_line(self.rvline.line);
+        let start_offset = text_prov.text().offset_of_line(self.origin_line);
         // If these subtractions crash, then it is likely due to a bad vline being kept around
         // somewhere
         if !caret && !self.is_empty() {
@@ -1639,8 +1641,9 @@ impl Iterator for VisualLines {
 
         Some(VLineInfo {
             interval: info.interval,
-            line_count: info.line_count,
+            // line_count: info.line_count,
             rvline: info.rvline,
+            origin_line: info.origin_line,
             vline: self.vline,
         })
     }
@@ -1756,13 +1759,13 @@ impl Iterator for VisualLinesRelative {
         let font_size = self.font_sizes.font_size(line);
         let end = end_of_rvline(&layouts, &self.text_prov, font_size, self.rvline);
 
-        let line_count = if let Some(text_layout) = layouts.get(font_size, line) {
-            text_layout.line_count()
-        } else {
-            1
-        };
-        debug_assert!(start <= end, "line: {line}, line_index: {line_index}, line_count: {line_count}, vline: {vline:?}, start: {start}, end: {end}, backwards: {} text_len: {}", self.backwards, self.text_prov.text().len());
-        let info = VLineInfo::new(start..end, self.rvline, line_count, ());
+        // let line_count = if let Some(text_layout) = layouts.get(font_size, line) {
+        //     text_layout.line_count()
+        // } else {
+        //     1
+        // };
+        debug_assert!(start <= end, "line: {line}, line_index: {line_index},  vline: {vline:?}, start: {start}, end: {end}, backwards: {} text_len: {}", self.backwards, self.text_prov.text().len());
+        let info = VLineInfo::new(start..end, self.rvline, ());
 
         Some(info)
     }

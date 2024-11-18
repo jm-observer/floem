@@ -1,19 +1,21 @@
+use peniko::Color;
+use peniko::kurbo::Rect;
+
+use floem_editor_core::{cursor::CursorMode, mode::Mode};
+use floem_reactive::{RwSignal, SignalGet, SignalWith};
+
 use crate::{
     context::PaintCx,
     id::ViewId,
     peniko::kurbo::Point,
     prop, prop_extractor,
+    Renderer,
     style::{Style, TextColor},
     style_class,
     text::{Attrs, AttrsList, TextLayout},
     view::View,
     views::Decorators,
-    Renderer,
 };
-use floem_editor_core::{cursor::CursorMode, mode::Mode};
-use floem_reactive::{RwSignal, SignalGet, SignalWith};
-use peniko::kurbo::Rect;
-use peniko::Color;
 
 use super::{CurrentLineColor, Editor};
 
@@ -190,11 +192,11 @@ impl View for EditorGutterView {
                             if highlight_current_line {
                                 for (_, end) in cursor.regions_iter() {
                                     // TODO: unsure if this is correct for wrapping lines
-                                    let rvline = editor.rvline_of_offset(end, cursor.affinity);
+                                    let (rvline, ..) = editor.visual_line_of_offset(end, cursor.affinity);
 
                                     if let Some(info) = screen_lines.info(rvline) {
                                         let line_height =
-                                            editor.line_height(info.vline_info.rvline.line);
+                                            editor.line_height(info.vline_info.origin_line);
                                         // the extra 1px is for a small line that appears between
                                         let rect = Rect::from_origin_size(
                                             (viewport.x0, info.vline_y - viewport.y0),

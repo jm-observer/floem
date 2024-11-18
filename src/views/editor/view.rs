@@ -1,5 +1,11 @@
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc};
 
+use floem_editor_core::{
+    cursor::{ColPosition, CursorAffinity, CursorMode},
+    mode::{Mode, VisualMode},
+};
+use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith};
+
 use crate::{
     action::{set_ime_allowed, set_ime_cursor_area},
     context::{LayoutCx, PaintCx, UpdateCx},
@@ -8,21 +14,15 @@ use crate::{
     keyboard::{Key, Modifiers, NamedKey},
     kurbo::{BezPath, Line, Point, Rect, Size, Vec2},
     peniko::Color,
-    reactive::{batch, create_effect, create_memo, create_rw_signal, Memo, RwSignal, Scope},
+    reactive::{create_effect, create_memo, create_rw_signal, Memo, RwSignal, Scope},
+    Renderer,
     style::{CursorStyle, Style},
     style_class,
     taffy::tree::NodeId,
     text::{Attrs, AttrsList, TextLayout},
     view::{IntoView, View},
-    views::{scroll, stack, Decorators},
-    Renderer,
+    views::{Decorators, scroll, stack},
 };
-use floem_editor_core::{
-    cursor::{ColPosition, CursorAffinity, CursorMode},
-    mode::{Mode, VisualMode},
-};
-use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith};
-
 use crate::views::editor::{
     command::CommandExecuted,
     gutter::editor_gutter_view,
@@ -30,8 +30,9 @@ use crate::views::editor::{
     layout::LineExtraStyle,
     visual_line::{RVLine, VLineInfo},
 };
+use crate::views::editor::visual_line::VLine;
 
-use super::{Editor, CHAR_WIDTH};
+use super::{CHAR_WIDTH, Editor};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DiffSectionKind {
@@ -56,7 +57,7 @@ pub struct DiffSection {
 // Possibly we should just move that out to a separate field on Lapce's editor.
 #[derive(Clone, PartialEq)]
 pub struct ScreenLines {
-    pub lines: Rc<Vec<RVLine>>,
+    pub lines: Vec<RVLine>,
     /// Guaranteed to have an entry for each `VLine` in `lines`  
     /// You should likely use accessor functions rather than this directly.
     pub info: Rc<HashMap<RVLine, LineInfo>>,
@@ -100,7 +101,7 @@ impl ScreenLines {
         Some(info.clone().with_base(base))
     }
 
-    pub fn vline_info(&self, rvline: RVLine) -> Option<VLineInfo<()>> {
+    pub fn vline_info(&self, rvline: RVLine) -> Option<VLineInfo<VLine>> {
         self.info.get(&rvline).map(|info| info.vline_info)
     }
 
@@ -152,33 +153,33 @@ impl ScreenLines {
         .map(|rvline| self.info(rvline).unwrap())
     }
 
-    pub fn iter_vline_info(&self) -> impl Iterator<Item = VLineInfo<()>> + '_ {
-        self.lines
-            .iter()
-            .map(|vline| &self.info[vline].vline_info)
-            .copied()
-    }
+    // pub fn iter_vline_info(&self) -> impl Iterator<Item = VLineInfo<()>> + '_ {
+    //     self.lines
+    //         .iter()
+    //         .map(|vline| &self.info[vline].vline_info)
+    //         .copied()
+    // }
 
-    pub fn iter_vline_info_r(
-        &self,
-        r: RangeInclusive<RVLine>,
-    ) -> impl Iterator<Item = VLineInfo<()>> + '_ {
-        // TODO(minor): this should probably skip tracking?
-        self.iter_line_info_r(r).map(|x| x.vline_info)
-    }
+    // pub fn iter_vline_info_r(
+    //     &self,
+    //     r: RangeInclusive<RVLine>,
+    // ) -> impl Iterator<Item = VLineInfo<()>> + '_ {
+    //     // TODO(minor): this should probably skip tracking?
+    //     self.iter_line_info_r(r).map(|x| x.vline_info)
+    // }
 
-    /// Iter the real lines underlying the visual lines on the screen
-    pub fn iter_lines(&self) -> impl Iterator<Item = usize> + '_ {
-        // We can just assume that the lines stored are contiguous and thus just get the first
-        // buffer line and then the last buffer line.
-        let start_vline = self.lines.first().copied().unwrap_or_default();
-        let end_vline = self.lines.last().copied().unwrap_or_default();
-
-        let start_line = self.info(start_vline).unwrap().vline_info.rvline.line;
-        let end_line = self.info(end_vline).unwrap().vline_info.rvline.line;
-
-        start_line..=end_line
-    }
+    // /// Iter the real lines underlying the visual lines on the screen
+    // pub fn iter_lines(&self) -> impl Iterator<Item = usize> + '_ {
+    //     // We can just assume that the lines stored are contiguous and thus just get the first
+    //     // buffer line and then the last buffer line.
+    //     let start_vline = self.lines.first().copied().unwrap_or_default();
+    //     let end_vline = self.lines.last().copied().unwrap_or_default();
+    //
+    //     let start_line = self.info(start_vline).unwrap().vline_info.rvline.line;
+    //     let end_line = self.info(end_vline).unwrap().vline_info.rvline.line;
+    //
+    //     start_line..=end_line
+    // }
 
     /// Iterate over the real lines underlying the visual lines on the screen with the y position
     /// of their layout.  
@@ -188,7 +189,7 @@ impl ScreenLines {
         self.lines.iter().filter_map(move |vline| {
             let info = self.info(*vline).unwrap();
 
-            let line = info.vline_info.rvline.line;
+            let line = info.vline_info.origin_line;
 
             if last_line == Some(line) {
                 // We've already considered this line.
@@ -222,82 +223,82 @@ impl ScreenLines {
             .copied()
     }
 
-    /// Ran on [LayoutEvent::CreatedLayout](super::visual_line::LayoutEvent::CreatedLayout) to update  [`ScreenLinesBase`] &
-    /// the viewport if necessary.
-    ///
-    /// Returns `true` if [`ScreenLines`] needs to be completely updated in response
-    pub fn on_created_layout(&self, ed: &Editor, line: usize) -> bool {
-        // The default creation is empty, force an update if we're ever like this since it should
-        // not happen.
-        if self.is_empty() {
-            return true;
-        }
-
-        let base = self.base.get_untracked();
-        let vp = ed.viewport.get_untracked();
-
-        let is_before = self
-            .iter_vline_info()
-            .next()
-            .map(|l| line < l.rvline.line)
-            .unwrap_or(false);
-
-        // If the line is created before the current screenlines, we can simply shift the
-        // base and viewport forward by the number of extra wrapped lines,
-        // without needing to recompute the screen lines.
-        if is_before {
-            // TODO: don't assume line height is constant
-            let line_height = f64::from(ed.line_height(0));
-
-            // We could use `try_text_layout` here, but I believe this guards against a rare
-            // crash (though it is hard to verify) wherein the style id has changed and so the
-            // layouts get cleared.
-            // However, the original trigger of the layout event was when a layout was created
-            // and it expects it to still exist. So we create it just in case, though we of course
-            // don't trigger another layout event.
-            let layout = ed.text_layout_trigger(line, false);
-
-            // One line was already accounted for by treating it as an unwrapped line.
-            let new_lines = layout.line_count() - 1;
-
-            let new_y0 = base.active_viewport.y0 + new_lines as f64 * line_height;
-            let new_y1 = new_y0 + vp.height();
-            let new_viewport = Rect::new(vp.x0, new_y0, vp.x1, new_y1);
-
-            batch(|| {
-                self.base.set(ScreenLinesBase {
-                    active_viewport: new_viewport,
-                });
-                ed.viewport.set(new_viewport);
-            });
-
-            // Ensure that it is created even after the base/viewport signals have been updated.
-            // (We need the `text_layout` to still have the layout)
-            // But we have to trigger an event still if it is created because it *would* alter the
-            // screenlines.
-            // TODO: this has some risk for infinite looping if we're unlucky.
-            let _layout = ed.text_layout_trigger(line, true);
-
-            return false;
-        }
-
-        let is_after = self
-            .iter_vline_info()
-            .last()
-            .map(|l| line > l.rvline.line)
-            .unwrap_or(false);
-
-        // If the line created was after the current view, we don't need to update the screenlines
-        // at all, since the new line is not visible and has no effect on y positions
-        if is_after {
-            return false;
-        }
-
-        // If the line is created within the current screenlines, we need to update the
-        // screenlines to account for the new line.
-        // That is handled by the caller.
-        true
-    }
+    // /// Ran on [LayoutEvent::CreatedLayout](super::visual_line::LayoutEvent::CreatedLayout) to update  [`ScreenLinesBase`] &
+    // /// the viewport if necessary.
+    // ///
+    // /// Returns `true` if [`ScreenLines`] needs to be completely updated in response
+    // pub fn on_created_layout(&self, ed: &Editor, line: usize) -> bool {
+    //     // The default creation is empty, force an update if we're ever like this since it should
+    //     // not happen.
+    //     if self.is_empty() {
+    //         return true;
+    //     }
+    //
+    //     let base = self.base.get_untracked();
+    //     let vp = ed.viewport.get_untracked();
+    //
+    //     let is_before = self
+    //         .iter_vline_info()
+    //         .next()
+    //         .map(|l| line < l.rvline.line)
+    //         .unwrap_or(false);
+    //
+    //     // If the line is created before the current screenlines, we can simply shift the
+    //     // base and viewport forward by the number of extra wrapped lines,
+    //     // without needing to recompute the screen lines.
+    //     if is_before {
+    //         // TODO: don't assume line height is constant
+    //         let line_height = f64::from(ed.line_height(0));
+    //
+    //         // We could use `try_text_layout` here, but I believe this guards against a rare
+    //         // crash (though it is hard to verify) wherein the style id has changed and so the
+    //         // layouts get cleared.
+    //         // However, the original trigger of the layout event was when a layout was created
+    //         // and it expects it to still exist. So we create it just in case, though we of course
+    //         // don't trigger another layout event.
+    //         let layout = ed.text_layout_trigger(line, false);
+    //
+    //         // One line was already accounted for by treating it as an unwrapped line.
+    //         let new_lines = layout.line_count() - 1;
+    //
+    //         let new_y0 = base.active_viewport.y0 + new_lines as f64 * line_height;
+    //         let new_y1 = new_y0 + vp.height();
+    //         let new_viewport = Rect::new(vp.x0, new_y0, vp.x1, new_y1);
+    //
+    //         batch(|| {
+    //             self.base.set(ScreenLinesBase {
+    //                 active_viewport: new_viewport,
+    //             });
+    //             ed.viewport.set(new_viewport);
+    //         });
+    //
+    //         // Ensure that it is created even after the base/viewport signals have been updated.
+    //         // (We need the `text_layout` to still have the layout)
+    //         // But we have to trigger an event still if it is created because it *would* alter the
+    //         // screenlines.
+    //         // TODO: this has some risk for infinite looping if we're unlucky.
+    //         let _layout = ed.text_layout_trigger(line, true);
+    //
+    //         return false;
+    //     }
+    //
+    //     let is_after = self
+    //         .iter_vline_info()
+    //         .last()
+    //         .map(|l| line > l.rvline.line)
+    //         .unwrap_or(false);
+    //
+    //     // If the line created was after the current view, we don't need to update the screenlines
+    //     // at all, since the new line is not visible and has no effect on y positions
+    //     if is_after {
+    //         return false;
+    //     }
+    //
+    //     // If the line is created within the current screenlines, we need to update the
+    //     // screenlines to account for the new line.
+    //     // That is handled by the caller.
+    //     true
+    // }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -313,12 +314,15 @@ pub struct LineInfo {
     // font_size: usize,
     // line_height: f64,
     // x: f64,
-    /// The starting y position of the overall line that this vline
-    /// is a part of.
+    /// The starting y position of the overall line that this vline is a part of.
+    ///
+    /// 子行的y位置？
     pub y: f64,
     /// The y position of the visual line
+    ///
+    /// 该行底部？在可视窗口的y位置，而不是整个文本的y位置
     pub vline_y: f64,
-    pub vline_info: VLineInfo<()>,
+    pub vline_info: VLineInfo<VLine>,
 }
 
 impl LineInfo {
@@ -348,8 +352,8 @@ impl EditorView {
         affinity: CursorAffinity,
     ) {
         // TODO: selections should have separate start/end affinity
-        let (start_rvline, start_col) = ed.rvline_col_of_offset(start_offset, affinity);
-        let (end_rvline, end_col) = ed.rvline_col_of_offset(end_offset, affinity);
+        let (start_rvline, _, start_col) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, _, end_col) = ed.visual_line_of_offset(end_offset, affinity);
 
         for LineInfo {
             vline_y,
@@ -391,7 +395,7 @@ impl EditorView {
             };
 
             let (x0, width) = if info.is_empty_phantom() {
-                let text_layout = ed.text_layout(line);
+                let text_layout = ed.text_layout_of_visual_line(line);
                 let width = text_layout
                     .get_layout_x(rvline.line_index)
                     .map(|(_, x1)| x1)
@@ -420,8 +424,8 @@ impl EditorView {
     ) {
         let viewport = ed.viewport.get_untracked();
 
-        let (start_rvline, _) = ed.rvline_col_of_offset(start_offset, affinity);
-        let (end_rvline, _) = ed.rvline_col_of_offset(end_offset, affinity);
+        let (start_rvline, _, _) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, _, _) = ed.visual_line_of_offset(end_offset, affinity);
         // Linewise selection is by *line* so we move to the start/end rvlines of the line
         let start_rvline = screen_lines
             .first_rvline_for_line(start_rvline.line)
@@ -436,8 +440,7 @@ impl EditorView {
             ..
         } in screen_lines.iter_line_info_r(start_rvline..=end_rvline)
         {
-            let rvline = info.rvline;
-            let line = rvline.line;
+            let line = info.origin_line;
 
             // The left column is always 0 for linewise selections.
             let right_col = ed.last_col(info, true);
@@ -468,8 +471,8 @@ impl EditorView {
         affinity: CursorAffinity,
         horiz: Option<ColPosition>,
     ) {
-        let (start_rvline, start_col) = ed.rvline_col_of_offset(start_offset, affinity);
-        let (end_rvline, end_col) = ed.rvline_col_of_offset(end_offset, affinity);
+        let (start_rvline, _, start_col) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, _, end_col) = ed.visual_line_of_offset(end_offset, affinity);
         let left_col = start_col.min(end_col);
         let right_col = start_col.max(end_col) + 1;
 
@@ -481,7 +484,7 @@ impl EditorView {
             });
 
         for (line_info, max_col) in lines {
-            let line = line_info.vline_info.rvline.line;
+            let line = line_info.vline_info.origin_line;
             let right_col = if let Some(ColPosition::End) = horiz {
                 max_col
             } else {
@@ -523,10 +526,10 @@ impl EditorView {
                 if highlight_current_line {
                     for (_, end) in cursor.regions_iter() {
                         // TODO: unsure if this is correct for wrapping lines
-                        let rvline = ed.rvline_of_offset(end, cursor.affinity);
+                        let rvline = ed.visual_line_of_offset(end, cursor.affinity);
 
-                        if let Some(info) = screen_lines.info(rvline) {
-                            let line_height = ed.line_height(info.vline_info.rvline.line);
+                        if let Some(info) = screen_lines.info(rvline.0) {
+                            let line_height = ed.line_height(info.vline_info.origin_line);
                             let rect = Rect::from_origin_size(
                                 (viewport.x0, info.vline_y),
                                 (viewport.width(), f64::from(line_height)),
@@ -643,7 +646,7 @@ impl EditorView {
                         continue;
                     }
 
-                    let line_height = ed.line_height(info.vline_info.rvline.line);
+                    let line_height = ed.line_height(info.vline_info.origin_line);
                     let rect =
                         Rect::from_origin_size((x, info.vline_y), (width, f64::from(line_height)));
                     cx.fill(&rect, &caret_color, 0.0);
@@ -746,7 +749,7 @@ impl EditorView {
 
         if ed.es.with(|s| s.show_indent_guide()) {
             for (line, y) in screen_lines.iter_lines_y() {
-                let text_layout = ed.text_layout(line);
+                let text_layout = ed.text_layout_of_visual_line(line);
                 let line_height = f64::from(ed.line_height(line));
                 let mut x = 0.0;
                 while x + 1.0 < text_layout.indent {
@@ -763,7 +766,7 @@ impl EditorView {
         Self::paint_cursor_caret(cx, ed, is_active, screen_lines);
 
         for (line, y) in screen_lines.iter_lines_y() {
-            let text_layout = ed.text_layout(line);
+            let text_layout = ed.text_layout_of_visual_line(line);
 
             EditorView::paint_extra_style(cx, &text_layout.extra_style, y, viewport);
 
@@ -831,7 +834,7 @@ impl View for EditorView {
             let screen_lines = editor.screen_lines.get_untracked();
             for (line, _) in screen_lines.iter_lines_y() {
                 // fill in text layout cache so that max width is correct.
-                editor.text_layout(line);
+                editor.text_layout_of_visual_line(line);
             }
 
             let inner_node = self.inner_node.unwrap();
@@ -1013,7 +1016,7 @@ pub fn cursor_caret(
 ) -> LineRegion {
     let info = ed.rvline_info_of_offset(offset, affinity);
     let (_, col) = ed.offset_to_line_col(offset);
-    let after_last_char = col == ed.line_end_col(info.rvline.line, true);
+    let after_last_char = col == ed.line_end_col(info.origin_line, true);
 
     let doc = ed.doc();
     let preedit_start = doc
@@ -1025,12 +1028,12 @@ pub fn cursor_caret(
                 preedit.cursor.map(|x| (preedit_line, x))
             })
         })
-        .filter(|(preedit_line, _)| *preedit_line == info.rvline.line)
+        .filter(|(preedit_line, _)| *preedit_line == info.origin_line)
         .map(|(_, (start, _))| start);
 
     let (_, col) = ed.offset_to_line_col(offset);
 
-    let point = ed.line_point_of_line_col(info.rvline.line, col, CursorAffinity::Forward, false);
+    let point = ed.line_point_of_line_col(info.origin_line, col, CursorAffinity::Forward, false);
 
     let rvline = if preedit_start.is_some() {
         // If there's an IME edit, then we need to use the point's y to get the actual y position
@@ -1038,10 +1041,10 @@ pub fn cursor_caret(
         let y = point.y;
 
         // TODO: I don't think this is handling varying line heights properly
-        let line_height = ed.line_height(info.rvline.line);
+        let line_height = ed.line_height(info.origin_line);
 
         let line_index = (y / f64::from(line_height)).floor() as usize;
-        RVLine::new(info.rvline.line, line_index)
+        RVLine::new(info.origin_line, line_index)
     } else {
         info.rvline
     };
@@ -1049,7 +1052,7 @@ pub fn cursor_caret(
     let x0 = point.x;
     if block {
         let x0 = ed
-            .line_point_of_line_col(info.rvline.line, col, CursorAffinity::Forward, true)
+            .line_point_of_line_col(info.origin_line, col, CursorAffinity::Forward, true)
             .x;
         let new_offset = ed.move_right(offset, Mode::Insert, 1);
         let (_, new_col) = ed.offset_to_line_col(new_offset);
@@ -1057,7 +1060,7 @@ pub fn cursor_caret(
             CHAR_WIDTH
         } else {
             let x1 = ed
-                .line_point_of_line_col(info.rvline.line, new_col, CursorAffinity::Backward, true)
+                .line_point_of_line_col(info.origin_line, new_col, CursorAffinity::Backward, true)
                 .x;
             x1 - x0
         };

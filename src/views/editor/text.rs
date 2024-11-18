@@ -1,13 +1,10 @@
 use std::{borrow::Cow, fmt::Debug, ops::Range, rc::Rc};
 
-use crate::{
-    keyboard::Modifiers,
-    peniko::Color,
-    reactive::{RwSignal, Scope},
-    text::{FamilyOwned, Stretch, Weight},
-    views::EditorCustomStyle,
-};
-use downcast_rs::{impl_downcast, Downcast};
+use downcast_rs::{Downcast, impl_downcast};
+use lapce_xi_rope::Rope;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use floem_editor_core::{
     buffer::rope_text::{RopeText, RopeTextVal},
     command::EditCommand,
@@ -20,19 +17,24 @@ use floem_editor_core::{
     word::WordCursor,
 };
 use floem_reactive::SignalGet;
-use lapce_xi_rope::Rope;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+
+use crate::{
+    keyboard::Modifiers,
+    peniko::Color,
+    reactive::{RwSignal, Scope},
+    text::{FamilyOwned, Stretch, Weight},
+    views::EditorCustomStyle,
+};
 
 use super::{
     actions::CommonAction,
     command::{Command, CommandExecuted},
+    Editor,
+    EditorStyle
+    ,
     gutter::GutterClass,
     id::EditorId,
-    normal_compute_screen_lines,
-    phantom_text::{PhantomText, PhantomTextKind, PhantomTextLine},
-    view::{ScreenLines, ScreenLinesBase},
-    Editor, EditorStyle,
+    phantom_text::{PhantomText, PhantomTextKind, PhantomTextLine}, view::{ScreenLines, ScreenLinesBase},
 };
 
 // TODO(minor): Should we get rid of this now that this is in floem?
@@ -107,7 +109,7 @@ pub trait Document: DocumentPhantom + Downcast {
     /// **2 |    if a.0 {
     /// **3 |        println!("");
     /// **4 |    }
-    fn visual_line_of_line(&self, line:usize) -> usize;
+    fn visual_line_of_line(&self, line: usize) -> usize;
 
     /// Find the next/previous offset of the match of the given character.  
     /// This is intended for use by the [Movement::NextUnmatched](floem_editor_core::movement::Movement::NextUnmatched) and
@@ -148,7 +150,8 @@ pub trait Document: DocumentPhantom + Downcast {
         }
 
         Some(PhantomText {
-            kind: PhantomTextKind::Ime, line,
+            kind: PhantomTextKind::Ime,
+            line,
             text: preedit.text,
             affinity: None,
             final_col: col,
@@ -165,13 +168,8 @@ pub trait Document: DocumentPhantom + Downcast {
     /// Note: you should typically *not* need to implement this, unless you have some custom
     /// behavior. Unfortunately this needs an `&self` to be a trait object. So don't call `.update`
     /// on `Self`
-    fn compute_screen_lines(
-        &self,
-        editor: &Editor,
-        base: RwSignal<ScreenLinesBase>,
-    ) -> ScreenLines {
-        normal_compute_screen_lines(editor, base)
-    }
+    fn compute_screen_lines(&self, editor: &Editor, base: RwSignal<ScreenLinesBase>)
+        -> ScreenLines;
 
     /// Run a command on the document.  
     /// The `ed` will contain this document (at some level, if it was wrapped then it may not be
@@ -218,7 +216,6 @@ pub trait DocumentPhantom {
     // fn multi_phantom_text(&self, _edid: EditorId, _styling: &EditorStyle, _line: usize) -> PhantomTextMultiLine {
     //     todo!()
     // }
-
 
     // Translate a column position into the position it would be before combining with
     // the phantom text.

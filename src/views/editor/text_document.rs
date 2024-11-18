@@ -22,6 +22,7 @@ use lapce_xi_rope::{Rope, RopeDelta};
 use smallvec::{smallvec, SmallVec};
 
 use crate::keyboard::Modifiers;
+use crate::views::editor::view::{ScreenLines, ScreenLinesBase};
 
 use super::{
     actions::{handle_command_default, CommonAction},
@@ -170,6 +171,14 @@ impl Document for TextDocument {
 
     fn preedit(&self) -> PreeditData {
         self.preedit.clone()
+    }
+
+    fn compute_screen_lines(
+        &self,
+        _editor: &Editor,
+        _base: RwSignal<ScreenLinesBase>,
+    ) -> ScreenLines {
+        todo!()
     }
 
     fn run_command(

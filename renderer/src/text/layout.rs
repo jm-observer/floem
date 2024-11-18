@@ -240,10 +240,11 @@ impl Clone for TextLayout {
 impl TextLayout {
 
     pub fn new(text: &str, attrs_list: AttrsList) -> Self {
-        Self::new_tracing(0, text, attrs_list)
+        let mut font_system = FONT_SYSTEM.lock();
+        Self::new_with_font_system(0, text, attrs_list, &mut font_system)
     }
 
-    pub fn new_tracing(line: usize, text: &str, attrs_list: AttrsList) -> Self {
+    pub fn new_with_font_system(line: usize, text: &str, attrs_list: AttrsList, font_system: &mut FontSystem) -> Self {
         let ending = LineEnding::None;
         let mut text_layout = Self {
             line,
@@ -267,28 +268,32 @@ impl TextLayout {
             tab_width: 8,
             scratch: Default::default(),
         };
-        let mut font_system = FONT_SYSTEM.lock();
-        text_layout.shape_until_scroll(&mut font_system, false);
+
+        text_layout.shape_until_scroll(font_system, false);
         text_layout
     }
 
-    pub fn line_layout(
+    pub fn line_layout_with_font_system(
         &mut self,
         font_system: &mut FontSystem,
-        line_i: usize,
-    ) -> Option<&[LayoutLine]> {
-        if line_i > 0 {
-            println!("line_i > 0");
-        }
-        Some(self.buffer.layout(
+    ) -> &[LayoutLine] {
+        self.buffer.layout(
             font_system,
             self.metrics.font_size,
             self.width_opt,
             self.wrap,
             self.monospace_width,
             self.tab_width,
-        ))
+        )
     }
+
+    pub fn line_layout(
+        &self,
+    ) -> &[LayoutLine] {
+        self.buffer.layout_opt().expect("layout not found")
+    }
+
+
 
     /// Shape lines until scroll
     pub fn shape_until_scroll(&mut self, font_system: &mut FontSystem, prune: bool) {
@@ -300,7 +305,7 @@ impl TextLayout {
             while self.scroll.vertical < 0.0 {
                 if self.scroll.line > 0 {
                     let line_i = self.scroll.line - 1;
-                    if let Some(layout) = self.line_layout(font_system, line_i) {
+                    let layout = self.line_layout_with_font_system(font_system);
                         let mut layout_height = 0.0;
                         for layout_line in layout.iter() {
                             layout_height +=
@@ -308,11 +313,11 @@ impl TextLayout {
                         }
                         self.scroll.line = line_i;
                         self.scroll.vertical += layout_height;
-                    } else {
-                        // If layout is missing, just assume line height
-                        self.scroll.line = line_i;
-                        self.scroll.vertical += metrics.line_height;
-                    }
+                    // } else {
+                    //     // If layout is missing, just assume line height
+                    //     self.scroll.line = line_i;
+                    //     self.scroll.vertical += metrics.line_height;
+                    // }
                 } else {
                     self.scroll.vertical = 0.0;
                     break;
@@ -341,8 +346,7 @@ impl TextLayout {
 
                 let mut layout_height = 0.0;
                 let layout = self
-                    .line_layout(font_system, line_i)
-                    .expect("shape_until_scroll invalid line");
+                    .line_layout_with_font_system(font_system);
                 for layout_line in layout.iter() {
                     let line_height = layout_line.line_height_opt.unwrap_or(metrics.line_height);
                     layout_height += line_height;
