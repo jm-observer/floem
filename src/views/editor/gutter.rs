@@ -194,7 +194,7 @@ impl View for EditorGutterView {
                                     // TODO: unsure if this is correct for wrapping lines
                                     let (rvline, ..) = editor.visual_line_of_offset(end, cursor.affinity);
 
-                                    if let Some(info) = screen_lines.info(rvline) {
+                                    if let Some(info) = screen_lines.info(rvline.rvline) {
                                         let line_height =
                                             editor.line_height(info.vline_info.origin_line);
                                         // the extra 1px is for a small line that appears between

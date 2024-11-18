@@ -25,6 +25,7 @@ use crate::{
     text::{FamilyOwned, Stretch, Weight},
     views::EditorCustomStyle,
 };
+use crate::views::editor::lines::Lines;
 
 use super::{
     actions::CommonAction,
@@ -100,6 +101,8 @@ pub trait Document: DocumentPhantom + Downcast {
     }
 
     fn cache_rev(&self) -> RwSignal<u64>;
+
+    fn lines(&self) -> RwSignal<Lines>;
 
     /// 获取原始行的合并行。
     /// 合并行 **2 |    if a.0 {...}
@@ -477,6 +480,10 @@ where
 
     fn cache_rev(&self) -> RwSignal<u64> {
         self.doc.cache_rev()
+    }
+
+    fn lines(&self) -> RwSignal<Lines> {
+        todo!()
     }
 
     fn visual_line_of_line(&self, line: usize) -> usize {

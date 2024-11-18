@@ -1,10 +1,11 @@
-use std::rc::Rc;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use lapce_xi_rope::Interval;
 
 use floem_editor_core::buffer::rope_text::RopeText;
 use floem_editor_core::cursor::CursorAffinity;
 use floem_reactive::{Scope, SignalGet, SignalWith};
+use tracing::{info, warn};
 
 use crate::views::editor::{Editor, EditorFontSizes};
 use crate::views::editor::layout::TextLayoutLine;
@@ -12,7 +13,7 @@ use crate::views::editor::listener::Listener;
 use crate::views::editor::visual_line::{FontSizeCacheId, LayoutEvent, ResolvedWrap, RVLine, TextLayoutProvider, VLine, VLineInfo};
 
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct OriginLine {
     line_index: usize,
     start_offset: usize,
@@ -28,7 +29,14 @@ pub struct OriginFoldedLine {
     pub text_layout: Arc<TextLayoutLine>,
 }
 
-#[derive(Clone)]
+impl Debug for OriginFoldedLine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OriginFoldedLine line_index={} origin_line_start={} origin_line_end={} origin_interval={}",
+            self.line_index, self.origin_line_start, self.origin_line_end, self.origin_interval)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct VisualLine {
     line_index: usize,
     origin_interval: Interval,
@@ -47,6 +55,20 @@ impl VisualLine {
     pub fn vline(&self) -> VLine {
         VLine(self.line_index)
     }
+
+    pub fn vline_info(&self) -> VLineInfo {
+        let rvline = self.rvline();
+        let vline = self.vline();
+        let interval = self.origin_interval;
+        // todo?
+        let origin_line = self.origin_folded_line;
+        VLineInfo {
+            interval,
+            rvline,
+            origin_line,
+            vline,
+        }
+    }
 }
 
 impl From<&VisualLine> for RVLine {
@@ -64,46 +86,61 @@ pub struct Lines {
     origin_lines: Vec<OriginLine>,
     origin_folded_lines: Vec<OriginFoldedLine>,
     visual_lines: Vec<VisualLine>,
-    pub font_sizes: Rc<EditorFontSizes>,
-    font_size_cache_id: FontSizeCacheId,
+    // pub font_sizes: Rc<EditorFontSizes>,
+    // font_size_cache_id: FontSizeCacheId,
     wrap: ResolvedWrap,
     pub layout_event: Listener<LayoutEvent>,
+    max_width: f64,
+    cache_rev: u64,
+    // editor: Editor
 }
 
 impl Lines {
-    pub fn new(cx: Scope, font_sizes: Rc<EditorFontSizes>) -> Self {
-        let id = font_sizes.cache_id();
+    pub fn new(cx: Scope) -> Self {
         Self {
-            font_sizes,
             wrap: ResolvedWrap::None,
-            font_size_cache_id: id,
+            // font_size_cache_id: id,
             layout_event: Listener::new_empty(cx),
             origin_lines: vec![],
             origin_folded_lines: vec![],
             visual_lines: vec![],
+            max_width: 0.0,
+            cache_rev: 0
         }
     }
 
-    pub fn update_font_sizes(&mut self, font_sizes: Rc<EditorFontSizes>, editor: &Editor) {
-        self.font_sizes = font_sizes;
-        self.clear();
-        self.update(editor)
-    }
+    // pub fn update_cache_id(&mut self) {
+    //     let current_id = self.font_sizes.cache_id();
+    //     if current_id != self.font_size_cache_id {
+    //         self.font_size_cache_id = current_id;
+    //         self.update()
+    //     }
+    // }
+
+    // pub fn update_font_sizes(&mut self, font_sizes: Rc<EditorFontSizes>) {
+    //     self.font_sizes = font_sizes;
+    //     self.update()
+    // }
 
     fn clear(&mut self) {
         self.origin_lines.clear();
         self.origin_folded_lines.clear();
         self.visual_lines.clear();
+        self.max_width = 0.0
     }
-    fn update(&mut self, editor: &Editor) {
-        let rope_text = self
-            .font_sizes
-            .doc
-            .get_untracked()
-            .rope_text();
+
+    // return do_update
+    pub fn update(&mut self, editor: &Editor) -> bool {
+        let doc_rev = editor.doc().cache_rev().get_untracked();
+        if doc_rev == self.cache_rev && self.cache_rev != 0 {
+            return false;
+        }
+        self.clear();
+        self.cache_rev = doc_rev;
+        let rope_text = editor.rope_text();
         let last_line = rope_text
             .last_line();
-        self.clear();
+
         let mut current_line = 0;
         let mut origin_folded_line_index = 0;
         let mut visual_line_index = 0;
@@ -112,7 +149,11 @@ impl Lines {
             let origin_line_start = text_layout.phantom_text.line;
             let origin_line_end = text_layout.phantom_text.last_line;
             let total_wrapped_lines = text_layout.text.line_layout().len();
-            
+
+            let width = text_layout.text.size().width;
+            if width > self.max_width {
+                self.max_width = width;
+            }
 
             for origin_line in origin_line_start..=origin_line_end {
                 self.origin_lines.push(OriginLine {
@@ -141,6 +182,15 @@ impl Lines {
             current_line = origin_line_end + 1;
             origin_folded_line_index += 1;
         }
+        // if self.visual_lines.len() > 2 {
+        //     tracing::error!("Lines origin_lines={} origin_folded_lines={} visual_lines={}", self.origin_lines.len(), self.origin_folded_lines.len(), self.visual_lines.len());
+        //     tracing::error!("{:?}", self.origin_lines);
+        //     tracing::error!("{:?}", self.origin_folded_lines);
+        //     tracing::error!("{:?}\n", self.visual_lines);
+        // }
+        warn!("update_lines done");
+        true
+
     }
 
     pub fn wrap(&self) -> ResolvedWrap {
@@ -156,12 +206,11 @@ impl Lines {
             return;
         }
         self.wrap = wrap;
-        self.clear();
         self.update(editor);
     }
 
     pub fn max_width(&self) -> f64 {
-        todo!()
+        self.max_width
     }
 
     pub fn text_layout_of_visual_line(
@@ -188,7 +237,7 @@ impl Lines {
 
     pub fn folded_line_of_origin_line(&self, origin_line: usize) -> &OriginFoldedLine {
         for folded_line in &self.origin_folded_lines {
-            if folded_line.origin_line_start <= origin_line || origin_line <= folded_line.origin_line_end {
+            if folded_line.origin_line_start <= origin_line && origin_line <= folded_line.origin_line_end {
                 return folded_line
             }
         }
@@ -208,15 +257,15 @@ impl Lines {
         &self.visual_lines[self.visual_lines.len() - 1]
     }
 
-    pub fn visual_line_of_offset(&self, offset: usize, _affinity: CursorAffinity) -> (RVLine, VLine, usize) {
+    pub fn visual_line_of_offset(&self, origin_line: usize, mut offset: usize, _affinity: CursorAffinity) -> (VLineInfo, usize) {
         // 位于的原始行，以及在原始行的起始offset
-        let (origin_line, offset_of_line) = self.font_sizes.doc.with_untracked(|x| {
-            let text = x.text();
-            let origin_line = text.line_of_offset(offset);
-            let origin_line_start_offset = text.offset_of_line(origin_line);
-            (origin_line, origin_line_start_offset)
-        });
-        let mut offset = offset - offset_of_line;
+        // let (origin_line, offset_of_line) = self.font_sizes.doc.with_untracked(|x| {
+        //     let text = x.text();
+        //     let origin_line = text.line_of_offset(offset);
+        //     let origin_line_start_offset = text.offset_of_line(origin_line);
+        //     (origin_line, origin_line_start_offset)
+        // });
+        // let mut offset = offset - offset_of_line;
         let folded_line = self.folded_line_of_origin_line(origin_line);
         let folded_line_layout = folded_line.text_layout.text.line_layout();
         let mut sub_line_index = folded_line_layout.len() - 1;
@@ -229,28 +278,22 @@ impl Lines {
             }
         }
         let visual_line = self.visual_line_of_folded_line_and_sub_index(folded_line.line_index, sub_line_index);
-        (RVLine {
-            line: folded_line.line_index,
-            line_index: sub_line_index,
-        }, VLine(visual_line.line_index), offset)
+
+        (visual_line.vline_info(), offset)
     }
 
     pub fn vline_infos(&self, start: usize, end: usize) -> Vec<VLineInfo<VLine>> {
+        let start = start.min(self.visual_lines.len() - 1);
+        let end = end.min(self.visual_lines.len() - 1);
 
         let mut vline_infos = Vec::with_capacity(end - start + 1);
         for index in start..=end {
-            let rvline = self.visual_lines[index].rvline();
-            let vline = self.visual_lines[index].vline();
-            let interval = self.visual_lines[index].origin_interval;
-            // todo?
-            let origin_line = self.visual_lines[index].origin_folded_line;
-            vline_infos.push(VLineInfo {
-                interval,
-                rvline,
-                origin_line,
-                vline,
-            });
+            vline_infos.push(self.visual_lines[index].vline_info());
         }
         vline_infos
+    }
+
+    pub fn first_vline_info(&self) -> VLineInfo<VLine> {
+        self.visual_lines[0].vline_info()
     }
 }

@@ -23,6 +23,7 @@ use floem_editor_core::{
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith, Trigger};
 use floem_renderer::text::FONT_SYSTEM;
 pub use prop::*;
+use tracing::warn;
 
 use crate::{
     action::{exec_after, TimerToken},
@@ -178,17 +179,17 @@ impl Editor {
         };
         let cursor = Cursor::new(cursor_mode, None, None);
         let cursor = cx.create_rw_signal(cursor);
-
+        let lines = doc.lines();
         let doc = cx.create_rw_signal(doc);
         let style = cx.create_rw_signal(style);
 
-        let font_sizes = Rc::new(EditorFontSizes {
-            id,
-            style: style.read_only(),
-            doc: doc.read_only(),
-        });
+        // let font_sizes = Rc::new(EditorFontSizes {
+        //     id,
+        //     style: style.read_only(),
+        //     doc: doc.read_only(),
+        // });
         // let lines = Rc::new(Lines::new(cx, font_sizes));
-        let lines = cx.create_rw_signal(lines::Lines::new(cx, font_sizes));
+
         let screen_lines = cx.create_rw_signal(ScreenLines::new(cx, viewport.get_untracked()));
 
         let editor_style = cx.create_rw_signal(EditorStyle::default());
@@ -275,16 +276,14 @@ impl Editor {
                 style: self.style.read_only(),
                 doc: self.doc.read_only(),
             });
-
-            let ed = self.clone();
-            self.lines.update(|x| {
-                x.update_font_sizes(font_sizes, &ed);
-            });
-
             self.doc.set(doc);
             if let Some(styling) = styling {
                 self.style.set(styling);
             }
+            let ed = self.clone();
+            self.lines.update(|x| {
+                x.update(&ed);
+            });
             self.screen_lines.update(|screen_lines| {
                 screen_lines.clear(self.viewport.get_untracked());
             });
@@ -308,7 +307,7 @@ impl Editor {
 
             let ed = self.clone();
             self.lines.update(|x| {
-                x.update_font_sizes(font_sizes, &ed);
+                x.update(&ed);
             });
             //
             // *self.lines.font_sizes.borrow_mut() =
@@ -377,9 +376,21 @@ impl Editor {
         self.doc().rope_text()
     }
 
-    pub fn lines(&self) -> Lines {
-        self.lines.get_untracked()
+    pub fn update_lines(&self) {
+        let ed = self.clone();
+        batch(|| {
+            if ed.lines.try_update(|x| x.update(&ed)).unwrap_or(false) {
+                ed.screen_lines.update(|screen_lines| {
+                    let new_screen_lines =
+                        ed.compute_screen_lines(screen_lines.base);
+                    *screen_lines = new_screen_lines;
+                });
+            }
+        });
+
     }
+
+
 
     pub fn vline_infos(&self, start: usize, end: usize) -> Vec<VLineInfo<VLine>> {
         self.lines.with_untracked(|x| x.vline_infos(start, end))
@@ -697,9 +708,9 @@ impl Editor {
 
     // ==== Position Information ====
 
-    // pub fn first_rvline_info(&self) -> VLineInfo<()> {
-    //     self.rvline_info(RVLine::default())
-    // }
+    pub fn first_rvline_info(&self) -> VLineInfo<VLine> {
+        self.lines.with_untracked(|x| x.first_vline_info())
+    }
 
     /// The number of lines in the document.
     pub fn num_lines(&self) -> usize {
@@ -761,7 +772,14 @@ impl Editor {
     /// If `affinity` is `CursorAffinity::Forward` and is at the very end of the wrapped line, then
     /// the offset is considered to be on the next line.
     pub fn vline_of_offset(&self, offset: usize, affinity: CursorAffinity) -> VLine {
-        self.lines.with_untracked(|x| x.visual_line_of_offset(offset, affinity).1)
+        let (origin_line, offset_of_line) = self.doc.with_untracked(|x| {
+            let text = x.text();
+            let origin_line = text.line_of_offset(offset);
+            let origin_line_start_offset = text.offset_of_line(origin_line);
+            (origin_line, origin_line_start_offset)
+        });
+        let offset = offset - offset_of_line;
+        self.lines.with_untracked(|x| x.visual_line_of_offset(origin_line, offset, affinity).0.vline)
     }
 
     // pub fn vline_of_line(&self, line: usize) -> VLine {
@@ -788,8 +806,15 @@ impl Editor {
     //         .vline_col_of_offset(self.text_prov(), offset, affinity)
     // }
 
-    pub fn visual_line_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (RVLine, VLine, usize) {
-        self.lines.with_untracked(|x| x.visual_line_of_offset(offset, affinity))
+    pub fn visual_line_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (VLineInfo, usize) {
+        let (origin_line, offset_of_line) = self.doc.with_untracked(|x| {
+            let text = x.text();
+            let origin_line = text.line_of_offset(offset);
+            let origin_line_start_offset = text.offset_of_line(origin_line);
+            (origin_line, origin_line_start_offset)
+        });
+        let offset = offset - offset_of_line;
+        self.lines.with_untracked(|x| x.visual_line_of_offset(origin_line, offset, affinity))
     }
 
     pub fn folded_line_of_offset(&self, offset: usize, _affinity: CursorAffinity) -> OriginFoldedLine {
@@ -829,9 +854,8 @@ impl Editor {
     //     self.iter_rvlines(false, rvline).next().unwrap()
     // }
 
-    pub fn rvline_info_of_offset(&self, offset: usize, affinity: CursorAffinity) -> VLineInfo<()> {
-        let _rvline = self.visual_line_of_offset(offset, affinity);
-        todo!()
+    pub fn rvline_info_of_offset(&self, offset: usize, affinity: CursorAffinity) -> VLineInfo<VLine> {
+        self.visual_line_of_offset(offset, affinity).0
     }
 
     /// Get the first column of the overall line of the visual line
@@ -914,10 +938,12 @@ impl Editor {
     /// Points outside of horizontal bounds will return the last column on the line.
     pub fn offset_of_point(&self, mode: Mode, point: Point, tracing: bool) -> (usize, bool) {
         let ((line, col), is_inside) = self.line_col_of_point(mode, point, tracing);
+
+        let rs = (self.offset_of_line_col(line, col), is_inside);
         if tracing {
-            tracing::info!("line={line} col={col} is_inside={is_inside}");
+            tracing::info!("line={line} col={col} is_inside={is_inside} rs={rs:?}");
         }
-        (self.offset_of_line_col(line, col), is_inside)
+        rs
     }
 
     /// Get the actual (line, col) of a particular point within the editor.
@@ -961,81 +987,73 @@ impl Editor {
     /// The boolean indicates whether the point is within the text bounds.
     /// Points outside of vertical bounds will return the last line.
     /// Points outside of horizontal bounds will return the last column on the line.
-    pub fn line_col_of_point(
-        &self,
-        _mode: Mode,
-        _point: Point,
-        _tracing: bool,
-    ) -> ((usize, usize), bool) {
+    pub fn line_col_of_point(&self, _mode: Mode, point: Point, _tracing: bool) -> ((usize, usize), bool) {
         // TODO: this assumes that line height is constant!
-        // let line_height = f64::from(self.style().line_height(self.id(), 0));
-        // let info = if point.y <= 0.0 {
-        //     Some(self.first_rvline_info().rvline)
-        // } else {
+        let line_height = f64::from(self.style().line_height(self.id(), 0));
+        let info = if point.y <= 0.0 {
+            self.first_rvline_info()
+        } else {
+            self.screen_lines
+                .with_untracked(|sl| {
+                    if let Some(info) = sl.iter_line_info().find(|info| {
+                        info.vline_y <= point.y && info.vline_y + line_height >= point.y
+                    }) {
+                        return info.vline_info
+                    } else {
+                        sl.info(*sl.lines.last().unwrap()).unwrap().vline_info
+                    }
+                })
+        };
+        // let info = info.unwrap_or_else(||{
         //     self.screen_lines
         //         .with_untracked(|sl| {
-        //             sl.iter_line_info().find(|info| {
-        //                 info.vline_y <= point.y && info.vline_y + line_height >= point.y
-        //             })
+        //
         //         })
-        //         .map(|info| info.vline_info.rvline)
-        // };
-        // // let info = info.unwrap_or_else(|| {
-        // //     for (y_idx, info) in self.iter_rvlines(false, RVLine::default()).enumerate() {
-        // //         let vline_y = y_idx as f64 * line_height;
-        // //         if vline_y <= point.y && vline_y + line_height >= point.y {
-        // //             return info;
-        // //         }
-        // //     }
-        // //
-        // //     self.last_rvline_info()
-        // // });
-        //
-        // let rvline = info.unwrap();
-        // let line = rvline.line;
-        // let text_layout = self.text_layout_of_visual_line(line);
-        //
-        // let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
-        //
-        // let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
-        // // We have to unapply the phantom text shifting in order to get back to the column in
-        // // the actual buffer
-        // let (line, col) = text_layout
-        //     .phantom_text
-        //     .origin_position_of_final_col(hit_point.index);
-        // // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
-        // // right end will just go to the end of the line.
-        // // let max_col = self.line_end_col(line, mode != Mode::Normal);
-        // // let max_col = text_layout.text.line().text().len();
-        // // if line == 9 {
-        // //     tracing::info!("col={col} max_col={max_col} {hit_point:?} {} {} visual_line={}", self.rope_text().line_content(line), text_layout.text.line().text(), text_layout.phantom_text.visual_line)
-        // // }
-        // // let mut col = col.min(max_col);
-        //
-        // // TODO: we need to handle affinity. Clicking at end of a wrapped line should give it a
-        // // backwards affinity, while being at the start of the next line should be a forwards aff
-        //
-        // // TODO: this is a hack to get around text layouts not including spaces at the end of
-        // // wrapped lines, but we want to be able to click on them
-        // // if !hit_point.is_inside {
-        // //     // TODO(minor): this is probably wrong in some manners
-        // //     col = info.last_col(self.text_prov(), true);
-        // // }
-        //
-        // // let tab_width = self.style().tab_width(self.id(), line);
-        // // if self.style().atomic_soft_tabs(self.id(), line) && tab_width > 1 {
-        // //     col = snap_to_soft_tab_line_col(
-        // //         &self.text(),
-        // //         line,
-        // //         col,
-        // //         SnapDirection::Nearest,
-        // //         tab_width,
-        // //     );
-        // //     tracing::info!("snap_to_soft_tab_line_col col={col}");
-        // // }
-        //
-        // ((line, col), hit_point.is_inside)
-        todo!()
+        //         .map(|info| info.vline_info)
+        // });
+
+        let rvline = info.rvline;
+        let line = rvline.line;
+        let text_layout = self.text_layout_of_visual_line(line);
+
+        let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
+
+        let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
+        // We have to unapply the phantom text shifting in order to get back to the column in
+        // the actual buffer
+        let (line, col) = text_layout.phantom_text.origin_position_of_final_col(hit_point.index);
+        // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
+        // right end will just go to the end of the line.
+        // let max_col = self.line_end_col(line, mode != Mode::Normal);
+        // let max_col = text_layout.text.line().text().len();
+        // if line == 9 {
+        //     tracing::info!("col={col} max_col={max_col} {hit_point:?} {} {} visual_line={}", self.rope_text().line_content(line), text_layout.text.line().text(), text_layout.phantom_text.visual_line)
+        // }
+        // let mut col = col.min(max_col);
+
+        // TODO: we need to handle affinity. Clicking at end of a wrapped line should give it a
+        // backwards affinity, while being at the start of the next line should be a forwards aff
+
+        // TODO: this is a hack to get around text layouts not including spaces at the end of
+        // wrapped lines, but we want to be able to click on them
+        // if !hit_point.is_inside {
+        //     // TODO(minor): this is probably wrong in some manners
+        //     col = info.last_col(self.text_prov(), true);
+        // }
+
+        // let tab_width = self.style().tab_width(self.id(), line);
+        // if self.style().atomic_soft_tabs(self.id(), line) && tab_width > 1 {
+        //     col = snap_to_soft_tab_line_col(
+        //         &self.text(),
+        //         line,
+        //         col,
+        //         SnapDirection::Nearest,
+        //         tab_width,
+        //     );
+        //     tracing::info!("snap_to_soft_tab_line_col col={col}");
+        // }
+
+        ((line, col), hit_point.is_inside)
     }
 
     // TODO: colposition probably has issues with wrapping?
@@ -1227,13 +1245,13 @@ impl TextLayoutProvider for Editor {
         let phantom_color = es.phantom_color();
         phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
 
-        if line == 1 {
-            tracing::info!("start");
-            for (range, attr) in attrs_list.spans() {
-                tracing::info!("{range:?} {attr:?}");
-            }
-            tracing::info!("");
-        }
+        // if line == 1 {
+        //     tracing::info!("start");
+        //     for (range, attr) in attrs_list.spans() {
+        //         tracing::info!("{range:?} {attr:?}");
+        //     }
+        //     tracing::info!("");
+        // }
 
         // tracing::info!("{line} {line_content}");
         // TODO: we could move tab width setting to be done by the document
@@ -1244,6 +1262,7 @@ impl TextLayoutProvider for Editor {
             attrs_list,
             &mut font_system,
         );
+        drop(font_system);
         // text_layout.set_tab_width(style.tab_width(edid, line));
 
         // dbg!(self.editor_style.with(|s| s.wrap_method()));

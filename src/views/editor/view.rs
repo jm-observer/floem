@@ -5,6 +5,7 @@ use floem_editor_core::{
     mode::{Mode, VisualMode},
 };
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith};
+use tracing::error;
 
 use crate::{
     action::{set_ime_allowed, set_ime_cursor_area},
@@ -299,6 +300,11 @@ impl ScreenLines {
     //     // That is handled by the caller.
     //     true
     // }
+
+    pub fn log(&self) {
+        tracing::info!("{:?}", self.lines);
+        tracing::info!("{:?}", self.info);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -352,8 +358,10 @@ impl EditorView {
         affinity: CursorAffinity,
     ) {
         // TODO: selections should have separate start/end affinity
-        let (start_rvline, _, start_col) = ed.visual_line_of_offset(start_offset, affinity);
-        let (end_rvline, _, end_col) = ed.visual_line_of_offset(end_offset, affinity);
+        let (start_rvline, start_col) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, end_col) = ed.visual_line_of_offset(end_offset, affinity);
+        let start_rvline = start_rvline.rvline;
+        let end_rvline= end_rvline.rvline;
 
         for LineInfo {
             vline_y,
@@ -424,8 +432,10 @@ impl EditorView {
     ) {
         let viewport = ed.viewport.get_untracked();
 
-        let (start_rvline, _, _) = ed.visual_line_of_offset(start_offset, affinity);
-        let (end_rvline, _, _) = ed.visual_line_of_offset(end_offset, affinity);
+        let (start_rvline, _) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, _) = ed.visual_line_of_offset(end_offset, affinity);
+        let start_rvline = start_rvline.rvline;
+        let end_rvline = end_rvline.rvline;
         // Linewise selection is by *line* so we move to the start/end rvlines of the line
         let start_rvline = screen_lines
             .first_rvline_for_line(start_rvline.line)
@@ -471,8 +481,10 @@ impl EditorView {
         affinity: CursorAffinity,
         horiz: Option<ColPosition>,
     ) {
-        let (start_rvline, _, start_col) = ed.visual_line_of_offset(start_offset, affinity);
-        let (end_rvline, _, end_col) = ed.visual_line_of_offset(end_offset, affinity);
+        let (start_rvline, start_col) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, end_col) = ed.visual_line_of_offset(end_offset, affinity);
+        let start_rvline = start_rvline.rvline;
+        let end_rvline = end_rvline.rvline;
         let left_col = start_col.min(end_col);
         let right_col = start_col.max(end_col) + 1;
 
@@ -528,7 +540,7 @@ impl EditorView {
                         // TODO: unsure if this is correct for wrapping lines
                         let rvline = ed.visual_line_of_offset(end, cursor.affinity);
 
-                        if let Some(info) = screen_lines.info(rvline.0) {
+                        if let Some(info) = screen_lines.info(rvline.0.rvline) {
                             let line_height = ed.line_height(info.vline_info.origin_line);
                             let rect = Rect::from_origin_size(
                                 (viewport.x0, info.vline_y),
@@ -748,7 +760,12 @@ impl EditorView {
         let indent_text_width = indent_text.hit_position(indent_unit.len()).point.x;
 
         if ed.es.with(|s| s.show_indent_guide()) {
+
             for (line, y) in screen_lines.iter_lines_y() {
+                if line == 8 {
+                    error!("the len is 8 but the index is 8");
+                    screen_lines.log();
+                }
                 let text_layout = ed.text_layout_of_visual_line(line);
                 let line_height = f64::from(ed.line_height(line));
                 let mut x = 0.0;
@@ -1014,6 +1031,7 @@ pub fn cursor_caret(
     block: bool,
     affinity: CursorAffinity,
 ) -> LineRegion {
+    ed.update_lines();
     let info = ed.rvline_info_of_offset(offset, affinity);
     let (_, col) = ed.offset_to_line_col(offset);
     let after_last_char = col == ed.line_end_col(info.origin_line, true);

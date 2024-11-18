@@ -562,11 +562,11 @@ impl PhantomTextMultiLine {
         font_size: usize,
         phantom_color: Color,
     ) {
-        if !self.text.is_empty() {
-            tracing::info!("add_phantom_style start line={}", self.line);
-        }
+        // if !self.text.is_empty() {
+        //     tracing::info!("add_phantom_style start line={}", self.line);
+        // }
         for phantom in &self.text {
-            tracing::info!("{phantom:?}");
+            // tracing::info!("{phantom:?}");
             if phantom.text.is_empty() {
                 continue
             }
@@ -799,9 +799,9 @@ impl PhantomTextMultiLine {
 
     pub fn final_line_content(&self, origin: &str) -> String {
         let rs = combine_with_text(&self.text, self.origin_text_len, origin);
-        if !self.text.is_empty() {
-            info!("line={} {origin} {rs}", self.line);
-        }
+        // if !self.text.is_empty() {
+        //     info!("line={} {origin} {rs}", self.line);
+        // }
         rs
     }
 }

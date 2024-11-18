@@ -22,6 +22,7 @@ use lapce_xi_rope::{Rope, RopeDelta};
 use smallvec::{smallvec, SmallVec};
 
 use crate::keyboard::Modifiers;
+use crate::views::editor::lines::Lines;
 use crate::views::editor::view::{ScreenLines, ScreenLinesBase};
 
 use super::{
@@ -163,6 +164,10 @@ impl Document for TextDocument {
 
     fn cache_rev(&self) -> RwSignal<u64> {
         self.cache_rev
+    }
+
+    fn lines(&self) -> RwSignal<Lines> {
+        todo!()
     }
 
     fn visual_line_of_line(&self, line: usize) -> usize {
