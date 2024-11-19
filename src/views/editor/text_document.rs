@@ -19,10 +19,13 @@ use floem_reactive::{
     create_effect, RwSignal, Scope, SignalGet, SignalTrack, SignalUpdate, SignalWith,
 };
 use lapce_xi_rope::{Rope, RopeDelta};
+use peniko::Color;
 use smallvec::{smallvec, SmallVec};
 
 use crate::keyboard::Modifiers;
+use crate::kurbo::Rect;
 use crate::views::editor::lines::Lines;
+use crate::views::editor::text::Styling;
 use crate::views::editor::view::{ScreenLines, ScreenLinesBase};
 
 use super::{
@@ -77,7 +80,9 @@ pub struct TextDocument {
     pre_command: Rc<RefCell<HashMap<EditorId, SmallVec<[PreCommandFn; 1]>>>>,
 
     on_updates: Rc<RefCell<SmallVec<[OnUpdateFn; 1]>>>,
-    editor_id: EditorId
+    editor_id: EditorId,
+    pub editor_style: RwSignal<EditorStyle>,
+    pub viewport: RwSignal<Rect>,
 }
 impl TextDocument {
     pub fn new(cx: Scope, text: impl Into<Rope>) -> TextDocument {
@@ -98,7 +103,8 @@ impl TextDocument {
                 *cache_rev += 1;
             });
         });
-
+        let viewport = cx.create_rw_signal(Rect::ZERO);
+        let editor_style = cx.create_rw_signal(EditorStyle::default());
         TextDocument {
             buffer: cx.create_rw_signal(buffer),
             cache_rev,
@@ -107,7 +113,7 @@ impl TextDocument {
             auto_indent: Cell::new(false),
             placeholders,
             pre_command: Rc::new(RefCell::new(HashMap::new())),
-            on_updates: Rc::new(RefCell::new(SmallVec::new())),editor_id
+            on_updates: Rc::new(RefCell::new(SmallVec::new())),editor_id, viewport, editor_style
         }
     }
 
@@ -266,6 +272,15 @@ impl Document for TextDocument {
         self.update_cache_rev();
         self.on_update(None, deltas);
     }
+
+    fn viewport(&self) -> RwSignal<Rect> {
+        self.viewport
+    }
+
+    fn editor_style(&self) -> RwSignal<EditorStyle> {
+        self.editor_style
+    }
+
 }
 impl DocumentPhantom for TextDocument {
     fn phantom_text(&self, styling: &EditorStyle, line: usize) -> PhantomTextLine {
@@ -391,6 +406,16 @@ impl CommonAction for TextDocument {
         }
 
         !deltas.is_empty()
+    }
+}
+
+impl Styling for TextDocument {
+    fn id(&self) -> u64 {
+        todo!()
+    }
+
+    fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)> {
+        todo!()
     }
 }
 

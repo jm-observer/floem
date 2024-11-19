@@ -4,13 +4,13 @@ use lapce_xi_rope::Interval;
 
 use floem_editor_core::buffer::rope_text::RopeText;
 use floem_editor_core::cursor::CursorAffinity;
-use floem_reactive::{Scope, SignalGet, SignalWith};
-use tracing::{info, warn};
+use floem_reactive::{Scope, SignalGet};
+use tracing::{warn};
 
-use crate::views::editor::{Editor, EditorFontSizes};
+use crate::views::editor::{Editor};
 use crate::views::editor::layout::TextLayoutLine;
 use crate::views::editor::listener::Listener;
-use crate::views::editor::visual_line::{FontSizeCacheId, LayoutEvent, ResolvedWrap, RVLine, TextLayoutProvider, VLine, VLineInfo};
+use crate::views::editor::visual_line::{LayoutEvent, ResolvedWrap, RVLine, TextLayoutProvider, VLine, VLineInfo};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]

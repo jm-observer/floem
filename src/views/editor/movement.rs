@@ -215,7 +215,7 @@ fn correct_crlf(text: &RopeTextVal, offset: usize) -> usize {
 
 fn atomic_soft_tab_width_for_offset(ed: &Editor, offset: usize) -> Option<usize> {
     let line = ed.visual_line_of_offset(offset, CursorAffinity::Forward).0.rvline.line;
-    let style = ed.style();
+    let style = ed.doc();
     if style.atomic_soft_tabs(ed.id(), line) {
         Some(style.tab_width(ed.id(), line))
     } else {

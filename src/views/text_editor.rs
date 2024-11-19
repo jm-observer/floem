@@ -49,8 +49,7 @@ pub fn text_editor(text: impl Into<Rope>) -> TextEditor {
     let cx = Scope::current();
 
     let doc = Rc::new(TextDocument::new(cx, text));
-    let style = Rc::new(SimpleStyling::new());
-    let editor = Editor::new(cx, doc, style, false);
+    let editor = Editor::new(cx, doc, false);
 
     let editor_sig = cx.create_rw_signal(editor.clone());
     let child = with_scope(cx, || {
@@ -77,8 +76,7 @@ pub fn text_editor_keys(
     let cx = Scope::current();
 
     let doc = Rc::new(TextDocument::new(cx, text));
-    let style = Rc::new(SimpleStyling::new());
-    let editor = Editor::new(cx, doc, style, false);
+    let editor = Editor::new(cx, doc, false);
 
     let editor_sig = cx.create_rw_signal(editor.clone());
     let child = with_scope(cx, || {
@@ -395,7 +393,7 @@ impl TextEditor {
 
     /// Use a different document in the text editor  
     pub fn use_doc(self, doc: Rc<dyn Document>) -> Self {
-        self.editor.update_doc(doc, None);
+        self.editor.update_doc(doc);
         self
     }
 
@@ -424,8 +422,7 @@ impl TextEditor {
         let id = ViewId::new();
 
         let doc = self.editor.doc();
-        let style = self.editor.style();
-        let editor = Editor::new(self.cx, doc, style, false);
+        let editor = Editor::new(self.cx, doc, false);
 
         let editor_sig = self.cx.create_rw_signal(editor.clone());
         let child = with_scope(self.cx, || {
@@ -457,8 +454,9 @@ impl TextEditor {
 
     /// Use an `Rc<dyn Styling>` to share between different editors.
     pub fn styling_rc(self, styling: Rc<dyn Styling>) -> Self {
-        self.editor.update_styling(styling);
-        self
+        todo!()
+        // self.editor.update_styling(styling);
+        // self
     }
 
     /// Set the text editor to read only.

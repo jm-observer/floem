@@ -23,7 +23,6 @@ use floem_editor_core::{
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith, Trigger};
 use floem_renderer::text::FONT_SYSTEM;
 pub use prop::*;
-use tracing::warn;
 
 use crate::{
     action::{exec_after, TimerToken},
@@ -34,7 +33,7 @@ use crate::{
     reactive::{batch, ReadSignal, RwSignal, Scope},
     text::{Attrs, AttrsList, LineHeightValue, TextLayout, Wrap},
 };
-use crate::views::editor::lines::{Lines, OriginFoldedLine};
+use crate::views::editor::lines::{OriginFoldedLine};
 use crate::views::editor::phantom_text::PhantomTextMultiLine;
 
 use self::{
@@ -84,7 +83,6 @@ pub struct Editor {
     pub read_only: RwSignal<bool>,
 
     pub(crate) doc: RwSignal<Rc<dyn Document>>,
-    pub(crate) style: RwSignal<Rc<dyn Styling>>,
 
     pub cursor: RwSignal<Cursor>,
 
@@ -136,10 +134,9 @@ impl Editor {
     pub fn new(
         cx: Scope,
         doc: Rc<dyn Document>,
-        style: Rc<dyn Styling>,
-        modal: bool,
+        modal: bool
     ) -> Editor {
-        let editor = Editor::new_direct(cx, doc, style, modal);
+        let editor = Editor::new_direct(cx, doc, modal);
         editor.recreate_view_effects();
 
         editor
@@ -164,12 +161,13 @@ impl Editor {
     pub fn new_direct(
         cx: Scope,
         doc: Rc<dyn Document>,
-        style: Rc<dyn Styling>,
-        modal: bool,
+        modal: bool
     ) -> Editor {
         let id = doc.editor_id();
+        let es = doc.editor_style();
+        let viewport = doc.viewport();
         let cx = cx.create_child();
-        let viewport = cx.create_rw_signal(Rect::ZERO);
+
         let cursor_mode = if modal {
             CursorMode::Normal(0)
         } else {
@@ -179,8 +177,6 @@ impl Editor {
         let cursor = cx.create_rw_signal(cursor);
         let lines = doc.lines();
         let doc = cx.create_rw_signal(doc);
-        let style = cx.create_rw_signal(style);
-
         // let font_sizes = Rc::new(EditorFontSizes {
         //     id,
         //     style: style.read_only(),
@@ -190,7 +186,6 @@ impl Editor {
 
         let screen_lines = cx.create_rw_signal(ScreenLines::new(cx, viewport.get_untracked()));
 
-        let editor_style = cx.create_rw_signal(EditorStyle::default());
 
         let ed = Editor {
             cx: Cell::new(cx),
@@ -199,7 +194,6 @@ impl Editor {
             active: cx.create_rw_signal(false),
             read_only: cx.create_rw_signal(false),
             doc,
-            style,
             cursor,
             window_origin: cx.create_rw_signal(Point::ZERO),
             viewport,
@@ -215,7 +209,7 @@ impl Editor {
             cursor_info: CursorInfo::new(cx),
             last_movement: cx.create_rw_signal(Movement::Left),
             ime_allowed: cx.create_rw_signal(false),
-            es: editor_style,
+            es,
             floem_style_id: cx.create_rw_signal(0),
         };
 
@@ -243,7 +237,7 @@ impl Editor {
     }
 
     pub fn config_id(&self) -> ConfigId {
-        let style_id = self.style.with(|s| s.id());
+        let style_id = self.doc.with(|s| s.id());
         let floem_style_id = self.floem_style_id;
         ConfigId::new(style_id, floem_style_id.get_untracked())
     }
@@ -257,7 +251,7 @@ impl Editor {
     }
 
     /// Swap the underlying document out
-    pub fn update_doc(&self, doc: Rc<dyn Document>, styling: Option<Rc<dyn Styling>>) {
+    pub fn update_doc(&self, doc: Rc<dyn Document>) {
         batch(|| {
             // Get rid of all the effects
             self.effects_cx.get().dispose();
@@ -275,9 +269,6 @@ impl Editor {
             //     doc: self.doc.read_only(),
             // });
             self.doc.set(doc);
-            if let Some(styling) = styling {
-                self.style.set(styling);
-            }
             let ed = self.clone();
             self.lines.update(|x| {
                 x.update(&ed);
@@ -292,36 +283,36 @@ impl Editor {
         });
     }
 
-    pub fn update_styling(&self, styling: Rc<dyn Styling>) {
-        batch(|| {
-            // Get rid of all the effects
-            self.effects_cx.get().dispose();
-
-            // let font_sizes = Rc::new(EditorFontSizes {
-            //     id: self.id(),
-            //     style: self.style.read_only(),
-            //     doc: self.doc.read_only(),
-            // });
-
-            let ed = self.clone();
-            self.lines.update(|x| {
-                x.update(&ed);
-            });
-            //
-            // *self.lines.font_sizes.borrow_mut() =
-            // self.lines.clear(0, None);
-
-            self.style.set(styling);
-
-            self.screen_lines.update(|screen_lines| {
-                screen_lines.clear(self.viewport.get_untracked());
-            });
-
-            // Recreate the effects
-            self.effects_cx.set(self.cx.get().create_child());
-            create_view_effects(self.effects_cx.get(), self);
-        });
-    }
+    // pub fn update_styling(&self, styling: Rc<dyn Styling>) {
+    //     batch(|| {
+    //         // Get rid of all the effects
+    //         self.effects_cx.get().dispose();
+    //
+    //         // let font_sizes = Rc::new(EditorFontSizes {
+    //         //     id: self.id(),
+    //         //     style: self.style.read_only(),
+    //         //     doc: self.doc.read_only(),
+    //         // });
+    //
+    //         let ed = self.clone();
+    //         self.lines.update(|x| {
+    //             x.update(&ed);
+    //         });
+    //         //
+    //         // *self.lines.font_sizes.borrow_mut() =
+    //         // self.lines.clear(0, None);
+    //
+    //         self.style.set(styling);
+    //
+    //         self.screen_lines.update(|screen_lines| {
+    //             screen_lines.clear(self.viewport.get_untracked());
+    //         });
+    //
+    //         // Recreate the effects
+    //         self.effects_cx.set(self.cx.get().create_child());
+    //         create_view_effects(self.effects_cx.get(), self);
+    //     });
+    // }
 
     // pub fn duplicate(&self, editor_id: Option<EditorId>) -> Editor {
     //     let doc = self.doc();
@@ -358,10 +349,10 @@ impl Editor {
     //     editor
     // }
 
-    /// Get the styling untracked
-    pub fn style(&self) -> Rc<dyn Styling> {
-        self.style.get_untracked()
-    }
+    // /// Get the styling untracked
+    // pub fn style(&self) -> Rc<dyn Styling> {
+    //     self.doc.get_untracked()
+    // }
 
     /// Get the text of the document  
     /// You should typically prefer [`Self::rope_text`]
@@ -650,7 +641,7 @@ impl Editor {
     // }
 
     pub fn line_height(&self, line: usize) -> f32 {
-        self.style().line_height(line)
+        self.doc().line_height(line)
     }
 
     // === Line Information ===
@@ -909,7 +900,7 @@ impl Editor {
     pub fn points_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (Point, Point) {
         let (line_info, line_offset, _) = self.visual_line_of_offset(offset, affinity);
         let line = line_info.vline.0;
-        let line_height = f64::from(self.style().line_height(line));
+        let line_height = f64::from(self.doc().line_height(line));
 
         let info = self.screen_lines.with_untracked(|sl| {
             sl.iter_line_info().find(|info| {
@@ -946,7 +937,7 @@ impl Editor {
 
     /// 获取该坐标所在的视觉行和行偏离
     pub fn line_col_of_point_with_phantom(&self, point: Point) -> (usize, usize, Arc<TextLayoutLine>) {
-        let line_height = f64::from(self.style().line_height(0));
+        let line_height = f64::from(self.doc().line_height(0));
         let y = point.y.max(0.0);
         let visual_line = (y / line_height) as usize;
         let text_layout = self.text_layout_of_visual_line(visual_line);
@@ -960,7 +951,7 @@ impl Editor {
     /// Points outside of horizontal bounds will return the last column on the line.
     pub fn line_col_of_point(&self, _mode: Mode, point: Point, _tracing: bool) -> ((usize, usize), bool) {
         // TODO: this assumes that line height is constant!
-        let line_height = f64::from(self.style().line_height(0));
+        let line_height = f64::from(self.doc().line_height(0));
         let info = if point.y <= 0.0 {
             self.first_rvline_info()
         } else {
@@ -1139,12 +1130,9 @@ impl TextLayoutProvider for Editor {
     fn new_text_layout(&self, mut line: usize) -> Arc<TextLayoutLine> {
         // TODO: we could share text layouts between different editor views given some knowledge of
         // their wrapping
-        let style = self.style();
         let doc = self.doc();
         line = doc.visual_line_of_line(line);
-        let es = self.es.get_untracked();
-        let viewport = self.viewport.get_untracked();
-        new_text_layout(doc, style, es, viewport, line)
+        new_text_layout(doc, line)
     }
 
     /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
@@ -1423,10 +1411,14 @@ impl CursorInfo {
 }
 
 
-fn new_text_layout(doc: Rc<dyn Document>, style: Rc<dyn Styling>
-                   , es: EditorStyle, viewport: Rect, mut line: usize) -> Arc<TextLayoutLine> {
+fn new_text_layout(doc: Rc<dyn Document>, mut line: usize) -> Arc<TextLayoutLine> {
     // TODO: we could share text layouts between different editor views given some knowledge of
     // their wrapping
+    let style = doc.clone();
+    line = doc.visual_line_of_line(line);
+    let es = doc.editor_style().get_untracked();
+    let viewport = doc.viewport().get_untracked();
+
     let text = doc.rope_text();
     line = doc.visual_line_of_line(line);
 

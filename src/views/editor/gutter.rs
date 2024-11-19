@@ -106,8 +106,7 @@ impl View for EditorGutterView {
         }
 
         let editor = self.editor.get_untracked();
-        let edid = editor.id();
-        let style = editor.style();
+        let style = editor.doc();
         // TODO: don't assume font family is constant for each line
         let family = style.font_family( 0);
         let attrs = Attrs::new()
@@ -132,11 +131,10 @@ impl View for EditorGutterView {
 
     fn paint(&mut self, cx: &mut PaintCx) {
         let editor = self.editor.get_untracked();
-        let edid = editor.id();
 
         let viewport = editor.viewport.get_untracked();
         let cursor = editor.cursor;
-        let style = editor.style.get_untracked();
+        let style = editor.doc.get_untracked();
 
         let (offset, mode) = cursor.with_untracked(|c| (c.offset(), c.get_mode()));
         let last_line = editor.last_line();

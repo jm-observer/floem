@@ -5,7 +5,6 @@ use floem_editor_core::{
     mode::{Mode, VisualMode},
 };
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith};
-use tracing::error;
 
 use crate::{
     action::{set_ime_allowed, set_ime_cursor_area},
@@ -652,7 +651,7 @@ impl EditorView {
         }
 
         cursor.with_untracked(|cursor| {
-            let style = ed.style();
+            let style = ed.doc();
             for (_, end) in cursor.regions_iter() {
                 let is_block = match cursor.mode {
                     CursorMode::Normal(_) | CursorMode::Visual { .. } => true,
@@ -752,8 +751,7 @@ impl EditorView {
         is_active: bool,
         screen_lines: &ScreenLines,
     ) {
-        let edid = ed.id();
-        let style = ed.style();
+        let style = ed.doc();
 
         // TODO: cache indent text layout width
         let indent_unit = ed.es.with_untracked(|es| es.indent_style()).as_str();
@@ -941,11 +939,9 @@ pub fn editor_view(
     let ed = editor.get_untracked();
 
     let doc = ed.doc;
-    let style = ed.style;
     let lines = ed.screen_lines;
     create_effect(move |_| {
         doc.track();
-        style.track();
         lines.track();
         id.request_layout();
     });

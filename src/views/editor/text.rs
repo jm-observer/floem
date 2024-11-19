@@ -25,6 +25,7 @@ use crate::{
     text::{FamilyOwned, Stretch, Weight},
     views::EditorCustomStyle,
 };
+use crate::kurbo::Rect;
 use crate::views::editor::lines::Lines;
 
 use super::{
@@ -90,7 +91,7 @@ impl PreeditData {
 }
 
 /// A document. This holds text.  
-pub trait Document: DocumentPhantom + Downcast {
+pub trait Document: DocumentPhantom + Downcast + Styling {
     /// Get the text of the document  
     /// Note: typically you should call [`Document::rope_text`] as that provides more checks and
     /// utility functions.
@@ -103,6 +104,10 @@ pub trait Document: DocumentPhantom + Downcast {
     fn editor_id(&self) -> EditorId;
 
     fn cache_rev(&self) -> RwSignal<u64>;
+
+    fn viewport(&self) -> RwSignal<Rect>;
+
+    fn editor_style(&self) -> RwSignal<EditorStyle>;
 
     fn lines(&self) -> RwSignal<Lines>;
 
@@ -465,6 +470,18 @@ impl<
         ExtCmdDocument { doc, handler }
     }
 }
+
+impl <D, F>Styling for ExtCmdDocument<D, F> where
+    D: Document,
+    F: Fn(&Editor, &Command, Option<usize>, Modifiers) -> CommandExecuted + 'static,{
+    fn id(&self) -> u64 {
+        todo!()
+    }
+
+    fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)> {
+        todo!()
+    }
+}
 // TODO: it'd be nice if there was some macro to wrap all of the `Document` methods
 // but replace specific ones
 impl<D, F> Document for ExtCmdDocument<D, F>
@@ -486,6 +503,14 @@ where
 
     fn cache_rev(&self) -> RwSignal<u64> {
         self.doc.cache_rev()
+    }
+
+    fn viewport(&self) -> RwSignal<Rect> {
+        self.doc.viewport()
+    }
+
+    fn editor_style(&self) -> RwSignal<EditorStyle> {
+        self.doc.editor_style()
     }
 
     fn lines(&self) -> RwSignal<Lines> {
