@@ -372,7 +372,7 @@ pub trait Styling {
     // ) {
     // }
 
-    fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)>;
+    fn line_styles(&self, line: usize) -> Vec<(usize, usize, Color)>;
 
     /// todo ? 幽灵文本的样式
     // fn apply_layout_styles(
@@ -478,7 +478,7 @@ impl <D, F>Styling for ExtCmdDocument<D, F> where
         todo!()
     }
 
-    fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)> {
+    fn line_styles(&self, line: usize) -> Vec<(usize, usize, Color)> {
         todo!()
     }
 }
@@ -759,7 +759,7 @@ impl Styling for SimpleStyling {
         self.atomic_soft_tabs
     }
 
-    fn line_style(&self, _line: usize) -> Vec<(usize, usize, Color)> {
+    fn line_styles(&self, _line: usize) -> Vec<(usize, usize, Color)> {
         Vec::new()
     }
 

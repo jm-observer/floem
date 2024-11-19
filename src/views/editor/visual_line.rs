@@ -1467,7 +1467,6 @@ fn vline_init_info_b(
 
 /// Information about the visual line and how it relates to the underlying buffer line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
 pub struct VLineInfo<L = VLine> {
     /// Start offset to end offset in the buffer that this visual line covers.
     ///

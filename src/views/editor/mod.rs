@@ -1415,7 +1415,6 @@ fn new_text_layout(doc: Rc<dyn Document>, mut line: usize) -> Arc<TextLayoutLine
     // TODO: we could share text layouts between different editor views given some knowledge of
     // their wrapping
     let style = doc.clone();
-    line = doc.visual_line_of_line(line);
     let es = doc.editor_style().get_untracked();
     let viewport = doc.viewport().get_untracked();
 
@@ -1442,7 +1441,7 @@ fn new_text_layout(doc: Rc<dyn Document>, mut line: usize) -> Arc<TextLayoutLine
     let phantom_text = doc.phantom_text(&es, line);
     let mut collapsed_line_col = phantom_text.folded_line();
     let multi_styles: Vec<(usize, usize, Color, Attrs)> = style
-        .line_style(line)
+        .line_styles(line)
         .into_iter()
         .map(|(start, end, color)| (start, end, color, attrs))
         .collect();
@@ -1474,7 +1473,7 @@ fn new_text_layout(doc: Rc<dyn Document>, mut line: usize) -> Arc<TextLayoutLine
         let next_phantom_text = doc.phantom_text(&es, collapsed_line);
         collapsed_line_col = next_phantom_text.folded_line();
         let styles: Vec<(usize, usize, Color, Attrs)> = style
-            .line_style(collapsed_line)
+            .line_styles(collapsed_line)
             .into_iter()
             .map(|(start, end, color)| (start + offset_col, end + offset_col, color, attrs))
             .collect();

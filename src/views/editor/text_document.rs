@@ -414,7 +414,7 @@ impl Styling for TextDocument {
         todo!()
     }
 
-    fn line_style(&self, line: usize) -> Vec<(usize, usize, Color)> {
+    fn line_styles(&self, line: usize) -> Vec<(usize, usize, Color)> {
         todo!()
     }
 }
