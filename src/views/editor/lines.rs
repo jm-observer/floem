@@ -148,7 +148,6 @@ impl Lines {
             let text_layout = editor.new_text_layout(current_line);
             let origin_line_start = text_layout.phantom_text.line;
             let origin_line_end = text_layout.phantom_text.last_line;
-            let total_wrapped_lines = text_layout.text.line_layout().len();
 
             let width = text_layout.text.size().width;
             if width > self.max_width {
@@ -161,6 +160,31 @@ impl Lines {
                     start_offset: rope_text.offset_of_line(origin_line),
                 });
             }
+
+            let mut visual_offset_start = 0;
+            let mut visual_offset_end ;
+            // [visual_offset_start..visual_offset_end)
+            for (origin_folded_line_sub_index, layout) in text_layout.text.line_layout().iter().enumerate() {
+                visual_offset_end =  visual_offset_start + layout.glyphs.len();
+
+                let offset_info = text_layout.phantom_text.origin_position_of_final_col(visual_offset_start);
+                let origin_interval_start = rope_text.offset_of_line_col(offset_info.0, offset_info.1);
+
+                let offset_info = text_layout.phantom_text.origin_position_of_final_col(visual_offset_end);
+                let origin_interval_end = rope_text.offset_of_line_col(offset_info.0, offset_info.1);
+                let origin_interval = Interval { start: origin_interval_start, end: origin_interval_end };
+
+                self.visual_lines.push(VisualLine {
+                    line_index: visual_line_index,
+                    origin_interval,
+                    origin_folded_line: origin_folded_line_index,
+                    origin_folded_line_sub_index,
+                });
+
+                visual_offset_start = visual_offset_end;
+                visual_line_index += 1;
+            }
+
             let origin_interval = Interval { start: rope_text.offset_of_line(origin_line_start), end: rope_text.offset_of_line(origin_line_end + 1) };
             self.origin_folded_lines.push(OriginFoldedLine {
                 line_index: origin_folded_line_index,
@@ -169,15 +193,6 @@ impl Lines {
                 origin_interval,
                 text_layout,
             });
-            for origin_folded_line_sub_index in 0..total_wrapped_lines {
-                self.visual_lines.push(VisualLine {
-                    line_index: visual_line_index,
-                    origin_interval,
-                    origin_folded_line: origin_folded_line_index,
-                    origin_folded_line_sub_index,
-                });
-                visual_line_index += 1;
-            }
 
             current_line = origin_line_end + 1;
             origin_folded_line_index += 1;
@@ -213,6 +228,7 @@ impl Lines {
         self.max_width
     }
 
+    /// ~~视觉~~行的text_layout信息
     pub fn text_layout_of_visual_line(
         &self,
         line: usize,
@@ -257,7 +273,8 @@ impl Lines {
         &self.visual_lines[self.visual_lines.len() - 1]
     }
 
-    pub fn visual_line_of_offset(&self, origin_line: usize, mut offset: usize, _affinity: CursorAffinity) -> (VLineInfo, usize) {
+    /// 原始字符所在的视觉行，以及行的偏移位置和是否是最后一个字符
+    pub fn visual_line_of_offset(&self, origin_line: usize, offset: usize, _affinity: CursorAffinity) -> (VLineInfo, usize, bool) {
         // 位于的原始行，以及在原始行的起始offset
         // let (origin_line, offset_of_line) = self.font_sizes.doc.with_untracked(|x| {
         //     let text = x.text();
@@ -267,19 +284,22 @@ impl Lines {
         // });
         // let mut offset = offset - offset_of_line;
         let folded_line = self.folded_line_of_origin_line(origin_line);
+        let mut final_offset  = folded_line.text_layout.phantom_text.final_col_of_col(origin_line, offset, false);
         let folded_line_layout = folded_line.text_layout.text.line_layout();
         let mut sub_line_index = folded_line_layout.len() - 1;
+        let mut last_char = false;
         for (index, sub_line) in folded_line_layout.iter().enumerate() {
-            if offset < sub_line.glyphs.len() {
+            if final_offset < sub_line.glyphs.len() {
                 sub_line_index = index;
+                last_char = final_offset == sub_line.glyphs.len() - 1;
                 break;
             } else {
-                offset -= sub_line.glyphs.len();
+                final_offset -= sub_line.glyphs.len();
             }
         }
         let visual_line = self.visual_line_of_folded_line_and_sub_index(folded_line.line_index, sub_line_index);
 
-        (visual_line.vline_info(), offset)
+        (visual_line.vline_info(), final_offset, last_char)
     }
 
     pub fn vline_infos(&self, start: usize, end: usize) -> Vec<VLineInfo<VLine>> {

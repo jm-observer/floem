@@ -1472,6 +1472,7 @@ pub struct VLineInfo<L = VLine> {
     /// Start offset to end offset in the buffer that this visual line covers.
     ///
     /// Note that this is obviously not including phantom text.
+    /// 视觉行的偏移区间
     pub interval: Interval,
     /// The total number of lines in this buffer line. Always at least 1.
     // pub line_count: usize,

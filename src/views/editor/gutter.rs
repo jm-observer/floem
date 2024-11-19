@@ -2,6 +2,7 @@ use peniko::Color;
 use peniko::kurbo::Rect;
 
 use floem_editor_core::{cursor::CursorMode, mode::Mode};
+use floem_editor_core::cursor::CursorAffinity;
 use floem_reactive::{RwSignal, SignalGet, SignalWith};
 
 use crate::{
@@ -139,7 +140,7 @@ impl View for EditorGutterView {
 
         let (offset, mode) = cursor.with_untracked(|c| (c.offset(), c.get_mode()));
         let last_line = editor.last_line();
-        let current_line = editor.line_of_offset(offset);
+        let current_line = editor.visual_line_of_offset(offset, CursorAffinity::Forward).0.vline.0;
 
         // TODO: don't assume font family is constant for each line
         let family = style.font_family(edid, 0);
@@ -158,7 +159,9 @@ impl View for EditorGutterView {
         self.text_width = self.compute_widest_text_width(&attrs_list);
 
         editor.screen_lines.with_untracked(|screen_lines| {
-            for (line, y) in screen_lines.iter_lines_y() {
+            for line_info in screen_lines.iter_line_info_y() {
+                let line = line_info.vline_info.vline.0;
+                let y = line_info.y;
                 // If it ends up outside the bounds of the file, stop trying to display line numbers
                 if line > last_line {
                     break;

@@ -647,7 +647,7 @@ impl PhantomTextMultiLine {
         self.final_col_of_col(line, pre_col, before_cursor)
     }
 
-    /// 找到该字符对应的合并后的位置
+    /// 原始行的偏移字符，的对应的合并后的位置
     ///
     /// Translate a column position into the text into what it would be after combining
     ///

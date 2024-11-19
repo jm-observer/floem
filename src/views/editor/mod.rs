@@ -271,11 +271,11 @@ impl Editor {
             // });
             // self.lines.clear(0, None);
 
-            let font_sizes = Rc::new(EditorFontSizes {
-                id: self.id(),
-                style: self.style.read_only(),
-                doc: self.doc.read_only(),
-            });
+            // let font_sizes = Rc::new(EditorFontSizes {
+            //     id: self.id(),
+            //     style: self.style.read_only(),
+            //     doc: self.doc.read_only(),
+            // });
             self.doc.set(doc);
             if let Some(styling) = styling {
                 self.style.set(styling);
@@ -299,11 +299,11 @@ impl Editor {
             // Get rid of all the effects
             self.effects_cx.get().dispose();
 
-            let font_sizes = Rc::new(EditorFontSizes {
-                id: self.id(),
-                style: self.style.read_only(),
-                doc: self.doc.read_only(),
-            });
+            // let font_sizes = Rc::new(EditorFontSizes {
+            //     id: self.id(),
+            //     style: self.style.read_only(),
+            //     doc: self.doc.read_only(),
+            // });
 
             let ed = self.clone();
             self.lines.update(|x| {
@@ -502,14 +502,12 @@ impl Editor {
     pub fn triple_click(&self, pointer_event: &PointerInputEvent) {
         let mode = self.cursor.with_untracked(|c| c.get_mode());
         let (mouse_offset, _) = self.offset_of_point(mode, pointer_event.pos, false);
-        let line = self.line_of_offset(mouse_offset);
-        let start = self.offset_of_line(line);
-        let end = self.offset_of_line(line + 1);
+        let vline = self.visual_line_of_offset(mouse_offset, CursorAffinity::Backward).0;
 
         self.cursor.update(|cursor| {
             cursor.add_region(
-                start,
-                end,
+                vline.interval.start,
+                vline.interval.end,
                 pointer_event.modifiers.shift(),
                 pointer_event.modifiers.alt(),
             )
@@ -750,9 +748,9 @@ impl Editor {
     }
 
     /// Get the buffer line of an offset
-    pub fn line_of_offset(&self, offset: usize) -> usize {
-        self.rope_text().line_of_offset(offset)
-    }
+    // pub fn line_of_offset(&self, offset: usize) -> usize {
+    //     self.rope_text().line_of_offset(offset)
+    // }
 
     /// Returns the offset into the buffer of the first non blank character on the given line.
     pub fn first_non_blank_character_on_line(&self, line: usize) -> usize {
@@ -806,7 +804,8 @@ impl Editor {
     //         .vline_col_of_offset(self.text_prov(), offset, affinity)
     // }
 
-    pub fn visual_line_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (VLineInfo, usize) {
+    /// 该原始偏移字符所在的视觉行，以及在视觉行的偏移
+    pub fn visual_line_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (VLineInfo, usize, bool) {
         let (origin_line, offset_of_line) = self.doc.with_untracked(|x| {
             let text = x.text();
             let origin_line = text.line_of_offset(offset);
@@ -818,7 +817,7 @@ impl Editor {
     }
 
     pub fn folded_line_of_offset(&self, offset: usize, _affinity: CursorAffinity) -> OriginFoldedLine {
-        let line = self.line_of_offset(offset);
+        let line = self.visual_line_of_offset(offset, _affinity).0.rvline.line;
         self.lines.with_untracked(|x| x.folded_line_of_origin_line(line).clone())
     }
 
@@ -878,31 +877,31 @@ impl Editor {
     /// `x` being the leading edge of the character, and `y` being the baseline.
     pub fn line_point_of_offset(&self, offset: usize, affinity: CursorAffinity) -> Point {
         let (line, col) = self.offset_to_line_col(offset);
-        self.line_point_of_line_col(line, col, affinity, false)
+        self.line_point_of_visual_line_col(line, col, affinity, false)
     }
 
     /// Returns the point into the text layout of the line at the given line and col.
     /// `x` being the leading edge of the character, and `y` being the baseline.  
-    pub fn line_point_of_line_col(
+    pub fn line_point_of_visual_line_col(
         &self,
-        line: usize,
+        visual_line: usize,
         col: usize,
         affinity: CursorAffinity,
-        force_affinity: bool,
+        _force_affinity: bool,
     ) -> Point {
-        let text_layout = self.text_layout_of_visual_line(line);
-        let index = if force_affinity {
-            text_layout
-                .phantom_text
-                .col_after_force(line, col, affinity == CursorAffinity::Forward)
-        } else {
-            text_layout
-                .phantom_text
-                .col_after(line, col, affinity == CursorAffinity::Forward)
-        };
+        let text_layout = self.text_layout_of_visual_line(visual_line);
+        // let index = if force_affinity {
+        //     text_layout
+        //         .phantom_text
+        //         .col_after_force(visual_line, col, affinity == CursorAffinity::Forward)
+        // } else {
+        //     text_layout
+        //         .phantom_text
+        //         .col_after(visual_line, col, affinity == CursorAffinity::Forward)
+        // };
         hit_position_aff(
             &text_layout.text,
-            index,
+            col,
             affinity == CursorAffinity::Backward,
         )
         .point
@@ -910,7 +909,8 @@ impl Editor {
 
     /// Get the (point above, point below) of a particular offset within the editor.
     pub fn points_of_offset(&self, offset: usize, affinity: CursorAffinity) -> (Point, Point) {
-        let line = self.line_of_offset(offset);
+        let (line_info, line_offset, _) = self.visual_line_of_offset(offset, affinity);
+        let line = line_info.vline.0;
         let line_height = f64::from(self.style().line_height(self.id(), line));
 
         let info = self.screen_lines.with_untracked(|sl| {
@@ -927,7 +927,7 @@ impl Editor {
 
         let y = info.vline_y;
 
-        let x = self.line_point_of_offset(offset, affinity).x;
+        let x = self.line_point_of_visual_line_col(line, line_offset, affinity, false).x;
 
         (Point::new(x, y), Point::new(x, y + line_height))
     }
@@ -998,7 +998,7 @@ impl Editor {
                     if let Some(info) = sl.iter_line_info().find(|info| {
                         info.vline_y <= point.y && info.vline_y + line_height >= point.y
                     }) {
-                        return info.vline_info
+                        info.vline_info
                     } else {
                         sl.info(*sl.lines.last().unwrap()).unwrap().vline_info
                     }
@@ -1112,7 +1112,7 @@ impl Editor {
         self.rope_text().move_left(offset, mode, count)
     }
 
-    // Get the text layout for a document line, creating it if needed.
+    /// ~~视觉~~行的text_layout信息
     pub fn text_layout_of_visual_line(&self, line: usize) -> Arc<TextLayoutLine> {
         self.lines.with_untracked(|x| x.text_layout_of_visual_line(line))
     }

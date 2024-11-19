@@ -184,7 +184,8 @@ impl ScreenLines {
 
     /// Iterate over the real lines underlying the visual lines on the screen with the y position
     /// of their layout.  
-    /// (line, y)  
+    /// (line, y)
+    /// 应该为视觉行
     pub fn iter_lines_y(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
         let mut last_line = None;
         self.lines.iter().filter_map(move |vline| {
@@ -202,6 +203,13 @@ impl ScreenLines {
             Some((line, info.y))
         })
     }
+
+    pub fn iter_line_info_y(&self) -> impl Iterator<Item = LineInfo> + '_ {
+        self.lines.iter().map(move |vline| {
+            self.info(*vline).unwrap()
+        })
+    }
+
 
     /// Get the earliest line info for a given line.
     pub fn info_for_line(&self, line: usize) -> Option<LineInfo> {
@@ -358,8 +366,8 @@ impl EditorView {
         affinity: CursorAffinity,
     ) {
         // TODO: selections should have separate start/end affinity
-        let (start_rvline, start_col) = ed.visual_line_of_offset(start_offset, affinity);
-        let (end_rvline, end_col) = ed.visual_line_of_offset(end_offset, affinity);
+        let (start_rvline, start_col, _) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, end_col, _) = ed.visual_line_of_offset(end_offset, affinity);
         let start_rvline = start_rvline.rvline;
         let end_rvline= end_rvline.rvline;
 
@@ -390,10 +398,10 @@ impl EditorView {
 
             // TODO: What affinity should these use?
             let x0 = ed
-                .line_point_of_line_col(line, left_col, CursorAffinity::Forward, true)
+                .line_point_of_visual_line_col(line, left_col, CursorAffinity::Forward, true)
                 .x;
             let x1 = ed
-                .line_point_of_line_col(line, right_col, CursorAffinity::Backward, true)
+                .line_point_of_visual_line_col(line, right_col, CursorAffinity::Backward, true)
                 .x;
             // TODO(minor): Should this be line != end_line?
             let x1 = if rvline != end_rvline {
@@ -432,8 +440,8 @@ impl EditorView {
     ) {
         let viewport = ed.viewport.get_untracked();
 
-        let (start_rvline, _) = ed.visual_line_of_offset(start_offset, affinity);
-        let (end_rvline, _) = ed.visual_line_of_offset(end_offset, affinity);
+        let (start_rvline, _, _) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, _, _) = ed.visual_line_of_offset(end_offset, affinity);
         let start_rvline = start_rvline.rvline;
         let end_rvline = end_rvline.rvline;
         // Linewise selection is by *line* so we move to the start/end rvlines of the line
@@ -457,7 +465,7 @@ impl EditorView {
 
             // TODO: what affinity to use?
             let x1 = ed
-                .line_point_of_line_col(line, right_col, CursorAffinity::Backward, true)
+                .line_point_of_visual_line_col(line, right_col, CursorAffinity::Backward, true)
                 .x
                 + CHAR_WIDTH;
 
@@ -481,8 +489,8 @@ impl EditorView {
         affinity: CursorAffinity,
         horiz: Option<ColPosition>,
     ) {
-        let (start_rvline, start_col) = ed.visual_line_of_offset(start_offset, affinity);
-        let (end_rvline, end_col) = ed.visual_line_of_offset(end_offset, affinity);
+        let (start_rvline, start_col, _) = ed.visual_line_of_offset(start_offset, affinity);
+        let (end_rvline, end_col, _) = ed.visual_line_of_offset(end_offset, affinity);
         let start_rvline = start_rvline.rvline;
         let end_rvline = end_rvline.rvline;
         let left_col = start_col.min(end_col);
@@ -505,10 +513,10 @@ impl EditorView {
 
             // TODO: what affinity to use?
             let x0 = ed
-                .line_point_of_line_col(line, left_col, CursorAffinity::Forward, true)
+                .line_point_of_visual_line_col(line, left_col, CursorAffinity::Forward, true)
                 .x;
             let x1 = ed
-                .line_point_of_line_col(line, right_col, CursorAffinity::Backward, true)
+                .line_point_of_visual_line_col(line, right_col, CursorAffinity::Backward, true)
                 .x;
 
             let line_height = ed.line_height(line);
@@ -760,12 +768,9 @@ impl EditorView {
         let indent_text_width = indent_text.hit_position(indent_unit.len()).point.x;
 
         if ed.es.with(|s| s.show_indent_guide()) {
-
-            for (line, y) in screen_lines.iter_lines_y() {
-                if line == 8 {
-                    error!("the len is 8 but the index is 8");
-                    screen_lines.log();
-                }
+            for line_info in screen_lines.iter_line_info_y() {
+                let line = line_info.vline_info.vline.0;
+                let y = line_info.y;
                 let text_layout = ed.text_layout_of_visual_line(line);
                 let line_height = f64::from(ed.line_height(line));
                 let mut x = 0.0;
@@ -782,7 +787,9 @@ impl EditorView {
 
         Self::paint_cursor_caret(cx, ed, is_active, screen_lines);
 
-        for (line, y) in screen_lines.iter_lines_y() {
+        for line_info in screen_lines.iter_line_info_y() {
+            let line = line_info.vline_info.vline.0;
+            let y = line_info.y;
             let text_layout = ed.text_layout_of_visual_line(line);
 
             EditorView::paint_extra_style(cx, &text_layout.extra_style, y, viewport);
@@ -848,11 +855,11 @@ impl View for EditorView {
                 self.inner_node = Some(self.id.new_taffy_node());
             }
 
-            let screen_lines = editor.screen_lines.get_untracked();
-            for (line, _) in screen_lines.iter_lines_y() {
-                // fill in text layout cache so that max width is correct.
-                editor.text_layout_of_visual_line(line);
-            }
+            // let screen_lines = editor.screen_lines.get_untracked();
+            // for (line, _) in screen_lines.iter_lines_y() {
+            //     // fill in text layout cache so that max width is correct.
+            //     editor.text_layout_of_visual_line(line);
+            // }
 
             let inner_node = self.inner_node.unwrap();
 
@@ -1032,9 +1039,7 @@ pub fn cursor_caret(
     affinity: CursorAffinity,
 ) -> LineRegion {
     ed.update_lines();
-    let info = ed.rvline_info_of_offset(offset, affinity);
-    let (_, col) = ed.offset_to_line_col(offset);
-    let after_last_char = col == ed.line_end_col(info.origin_line, true);
+    let (info, col, after_last_char) = ed.visual_line_of_offset(offset, affinity);
 
     let doc = ed.doc();
     let preedit_start = doc
@@ -1042,16 +1047,15 @@ pub fn cursor_caret(
         .preedit
         .with_untracked(|preedit| {
             preedit.as_ref().and_then(|preedit| {
-                let preedit_line = ed.line_of_offset(preedit.offset);
+                // todo?
+                let preedit_line = ed.visual_line_of_offset(preedit.offset, affinity).0;
                 preedit.cursor.map(|x| (preedit_line, x))
             })
         })
-        .filter(|(preedit_line, _)| *preedit_line == info.origin_line)
+        .filter(|(preedit_line, _)| *preedit_line == info)
         .map(|(_, (start, _))| start);
 
-    let (_, col) = ed.offset_to_line_col(offset);
-
-    let point = ed.line_point_of_line_col(info.origin_line, col, CursorAffinity::Forward, false);
+    let point = ed.line_point_of_visual_line_col(info.origin_line, col, CursorAffinity::Forward, false);
 
     let rvline = if preedit_start.is_some() {
         // If there's an IME edit, then we need to use the point's y to get the actual y position
@@ -1070,7 +1074,7 @@ pub fn cursor_caret(
     let x0 = point.x;
     if block {
         let x0 = ed
-            .line_point_of_line_col(info.origin_line, col, CursorAffinity::Forward, true)
+            .line_point_of_visual_line_col(info.origin_line, col, CursorAffinity::Forward, true)
             .x;
         let new_offset = ed.move_right(offset, Mode::Insert, 1);
         let (_, new_col) = ed.offset_to_line_col(new_offset);
@@ -1078,7 +1082,7 @@ pub fn cursor_caret(
             CHAR_WIDTH
         } else {
             let x1 = ed
-                .line_point_of_line_col(info.origin_line, new_col, CursorAffinity::Backward, true)
+                .line_point_of_visual_line_col(info.origin_line, new_col, CursorAffinity::Backward, true)
                 .x;
             x1 - x0
         };
