@@ -77,9 +77,11 @@ pub struct TextDocument {
     pre_command: Rc<RefCell<HashMap<EditorId, SmallVec<[PreCommandFn; 1]>>>>,
 
     on_updates: Rc<RefCell<SmallVec<[OnUpdateFn; 1]>>>,
+    editor_id: EditorId
 }
 impl TextDocument {
     pub fn new(cx: Scope, text: impl Into<Rope>) -> TextDocument {
+        let editor_id = EditorId::next();
         let text = text.into();
         let buffer = Buffer::new(text);
         let preedit = PreeditData {
@@ -105,7 +107,7 @@ impl TextDocument {
             auto_indent: Cell::new(false),
             placeholders,
             pre_command: Rc::new(RefCell::new(HashMap::new())),
-            on_updates: Rc::new(RefCell::new(SmallVec::new())),
+            on_updates: Rc::new(RefCell::new(SmallVec::new())),editor_id
         }
     }
 
@@ -164,6 +166,10 @@ impl Document for TextDocument {
 
     fn cache_rev(&self) -> RwSignal<u64> {
         self.cache_rev
+    }
+
+    fn editor_id(&self) -> EditorId {
+        self.editor_id
     }
 
     fn lines(&self) -> RwSignal<Lines> {
@@ -262,11 +268,11 @@ impl Document for TextDocument {
     }
 }
 impl DocumentPhantom for TextDocument {
-    fn phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextLine {
+    fn phantom_text(&self, styling: &EditorStyle, line: usize) -> PhantomTextLine {
         let mut text = SmallVec::new();
         let mut origin_text_len = 0;
         if self.buffer.with_untracked(Buffer::is_empty) {
-            if let Some(placeholder) = self.placeholder(edid) {
+            if let Some(placeholder) = self.placeholder(self.editor_id()) {
                 origin_text_len = placeholder.len();
                 text.push(PhantomText {
                     kind: PhantomTextKind::Placeholder, line,

@@ -109,10 +109,10 @@ impl View for EditorGutterView {
         let edid = editor.id();
         let style = editor.style();
         // TODO: don't assume font family is constant for each line
-        let family = style.font_family(edid, 0);
+        let family = style.font_family( 0);
         let attrs = Attrs::new()
             .family(&family)
-            .font_size(style.font_size(edid, 0) as f32);
+            .font_size(style.font_size(0) as f32);
 
         let attrs_list = AttrsList::new(attrs);
 
@@ -143,13 +143,13 @@ impl View for EditorGutterView {
         let current_line = editor.visual_line_of_offset(offset, CursorAffinity::Forward).0.vline.0;
 
         // TODO: don't assume font family is constant for each line
-        let family = style.font_family(edid, 0);
+        let family = style.font_family(0);
         let accent_color = self.gutter_style.gs_accent_color();
         let dim_color = self.gutter_style.gs_dim_color();
         let attrs = Attrs::new()
             .family(&family)
             .color(dim_color)
-            .font_size(style.font_size(edid, 0) as f32);
+            .font_size(style.font_size( 0) as f32);
         let attrs_list = AttrsList::new(attrs);
         let current_line_attrs_list = AttrsList::new(attrs.color(accent_color));
         let show_relative = editor.es.with_untracked(|es| es.modal())
@@ -167,7 +167,7 @@ impl View for EditorGutterView {
                     break;
                 }
 
-                let line_height = f64::from(style.line_height(edid, line));
+                let line_height = f64::from(style.line_height(line));
 
                 let text = if show_relative {
                     if line == current_line {

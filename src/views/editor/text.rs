@@ -100,6 +100,8 @@ pub trait Document: DocumentPhantom + Downcast {
         RopeTextVal::new(self.text())
     }
 
+    fn editor_id(&self) -> EditorId;
+
     fn cache_rev(&self) -> RwSignal<u64>;
 
     fn lines(&self) -> RwSignal<Lines>;
@@ -214,7 +216,7 @@ pub trait Document: DocumentPhantom + Downcast {
 impl_downcast!(Document);
 
 pub trait DocumentPhantom {
-    fn phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextLine;
+    fn phantom_text(&self, styling: &EditorStyle, line: usize) -> PhantomTextLine;
 
     // fn multi_phantom_text(&self, _edid: EditorId, _styling: &EditorStyle, _line: usize) -> PhantomTextMultiLine {
     //     todo!()
@@ -310,16 +312,16 @@ pub trait Styling {
     /// The id for caching the styling.
     fn id(&self) -> u64;
 
-    fn font_size(&self, _edid: EditorId, _line: usize) -> usize {
+    fn font_size(&self, _line: usize) -> usize {
         16
     }
 
-    fn line_height(&self, edid: EditorId, line: usize) -> f32 {
-        let font_size = self.font_size(edid, line) as f32;
+    fn line_height(&self, line: usize) -> f32 {
+        let font_size = self.font_size(line) as f32;
         (1.5 * font_size).round().max(font_size)
     }
 
-    fn font_family(&self, _edid: EditorId, _line: usize) -> Cow<[FamilyOwned]> {
+    fn font_family(&self, _line: usize) -> Cow<[FamilyOwned]> {
         Cow::Borrowed(&[FamilyOwned::SansSerif])
     }
 
@@ -338,7 +340,7 @@ pub trait Styling {
 
     /// Which line the indentation line should be based off of
     /// This is used for lining it up under a scope.
-    fn indent_line(&self, _edid: EditorId, line: usize, _line_content: &str) -> usize {
+    fn indent_line(&self, line: usize, _line_content: &str) -> usize {
         line
     }
 
@@ -478,6 +480,10 @@ where
         self.doc.rope_text()
     }
 
+    fn editor_id(&self) -> EditorId {
+        self.doc.editor_id()
+    }
+
     fn cache_rev(&self) -> RwSignal<u64> {
         self.doc.cache_rev()
     }
@@ -545,8 +551,8 @@ where
     D: Document,
     F: Fn(&Editor, &Command, Option<usize>, Modifiers) -> CommandExecuted,
 {
-    fn phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextLine {
-        self.doc.phantom_text(edid, styling, line)
+    fn phantom_text(&self, styling: &EditorStyle, line: usize) -> PhantomTextLine {
+        self.doc.phantom_text(styling, line)
     }
 
     // fn multi_phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextMultiLine {
@@ -689,11 +695,11 @@ impl Styling for SimpleStyling {
         0
     }
 
-    fn font_size(&self, _edid: EditorId, _line: usize) -> usize {
+    fn font_size(&self, _line: usize) -> usize {
         self.font_size
     }
 
-    fn line_height(&self, _edid: EditorId, _line: usize) -> f32 {
+    fn line_height(&self, _line: usize) -> f32 {
         let line_height = if self.line_height < SCALE_OR_SIZE_LIMIT {
             self.line_height * self.font_size as f32
         } else {
@@ -704,7 +710,7 @@ impl Styling for SimpleStyling {
         (line_height.round() as usize).max(self.font_size) as f32
     }
 
-    fn font_family(&self, _edid: EditorId, _line: usize) -> Cow<[FamilyOwned]> {
+    fn font_family(&self, _line: usize) -> Cow<[FamilyOwned]> {
         Cow::Borrowed(&self.font_family)
     }
 
