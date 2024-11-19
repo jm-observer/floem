@@ -746,6 +746,27 @@ impl PhantomTextMultiLine {
         (line, origin_start + (new_col - final_start))
     }
 
+    /// Translate a column position into the position it would be before combining
+    ///
+    /// 获取偏移位置的幽灵文本以及在该幽灵文本的偏移值
+    pub fn phantom_text_of_final_col(&self, col: usize) -> Option<(PhantomText, usize)> {
+        if self.text.is_empty() {
+            return None;
+        };
+        let text_iter = self.text.iter();
+        for text in text_iter {
+            let Some((phantom_final_start, phantom_final_end)) = text.final_col_range() else {
+                continue;
+            };
+            //  [origin_start                     [text.col
+            //  [final_start       ..col..        [phantom_final_start   ..col..  phantom_final_end]  ..col..
+            if phantom_final_start <= col && col <= phantom_final_end {
+                return Some((text.clone(), col - phantom_final_start))
+            }
+        }
+        None
+    }
+
     /// Iterator over (col_shift, size, hint, pre_column)
     /// Note that this only iterates over the ordered text, since those depend on the text for where
     /// they'll be positioned

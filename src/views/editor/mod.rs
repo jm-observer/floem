@@ -946,41 +946,14 @@ impl Editor {
         rs
     }
 
-    /// Get the actual (line, col) of a particular point within the editor.
-    pub fn line_col_of_point_with_phantom(&self, _point: Point) -> (usize, usize) {
-        // let line_height = f64::from(self.style().line_height(self.id(), 0));
-        // let info = if point.y <= 0.0 {
-        //     Some(self.first_rvline_info().rvline)
-        // } else {
-        //     self.screen_lines
-        //         .with_untracked(|sl| {
-        //             sl.iter_line_info().find(|info| {
-        //                 info.vline_y <= point.y && info.vline_y + line_height >= point.y
-        //             })
-        //         })
-        //         .map(|info| info.vline_info.rvline)
-        // };
-        // todo
-        // let info = info.unwrap_or_else(|| {
-        //     for (y_idx, info) in self.iter_rvlines(false, RVLine::default()).enumerate() {
-        //         let vline_y = y_idx as f64 * line_height;
-        //         if vline_y <= point.y && vline_y + line_height >= point.y {
-        //             return info;
-        //         }
-        //     }
-        //
-        //     self.last_rvline_info()
-        // });
-
-        // let rvline = info.unwrap();
-        // let line = rvline.line;
-        // let text_layout = self.text_layout_of_visual_line(line);
-        //
-        // let y = text_layout.get_layout_y(rvline.line_index).unwrap_or(0.0);
-        //
-        // let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
-        // (line, hit_point.index)
-        todo!()
+    /// 获取该坐标所在的视觉行和行偏离
+    pub fn line_col_of_point_with_phantom(&self, point: Point) -> (usize, usize, Arc<TextLayoutLine>) {
+        let line_height = f64::from(self.style().line_height(self.id(), 0));
+        let y = point.y.max(0.0);
+        let visual_line = (y / line_height) as usize;
+        let text_layout = self.text_layout_of_visual_line(visual_line);
+        let hit_point = text_layout.text.hit_point(Point::new(point.x, y));
+        (visual_line, hit_point.index, text_layout)
     }
 
     /// Get the (line, col) of a particular point within the editor.
