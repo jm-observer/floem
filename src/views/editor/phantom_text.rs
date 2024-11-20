@@ -819,11 +819,7 @@ impl PhantomTextMultiLine {
     }
 
     pub fn final_line_content(&self, origin: &str) -> String {
-        let rs = combine_with_text(&self.text, self.origin_text_len, origin);
-        // if !self.text.is_empty() {
-        //     info!("line={} {origin} {rs}", self.line);
-        // }
-        rs
+        combine_with_text(&self.text, self.origin_text_len, origin)
     }
 }
 

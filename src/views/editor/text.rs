@@ -119,7 +119,7 @@ pub trait Document: DocumentPhantom + Downcast + Styling {
     /// **2 |    if a.0 {
     /// **3 |        println!("");
     /// **4 |    }
-    fn visual_line_of_line(&self, line: usize) -> usize;
+    // fn visual_line_of_line(&self, line: usize) -> usize;
 
     /// Find the next/previous offset of the match of the given character.  
     /// This is intended for use by the [Movement::NextUnmatched](floem_editor_core::movement::Movement::NextUnmatched) and
@@ -478,7 +478,7 @@ impl <D, F>Styling for ExtCmdDocument<D, F> where
         todo!()
     }
 
-    fn line_styles(&self, line: usize) -> Vec<(usize, usize, Color)> {
+    fn line_styles(&self, _line: usize) -> Vec<(usize, usize, Color)> {
         todo!()
     }
 }
@@ -517,9 +517,9 @@ where
         todo!()
     }
 
-    fn visual_line_of_line(&self, line: usize) -> usize {
-        line
-    }
+    // fn visual_line_of_line(&self, line: usize) -> usize {
+    //     line
+    // }
 
     fn find_unmatched(&self, offset: usize, previous: bool, ch: char) -> usize {
         self.doc.find_unmatched(offset, previous, ch)

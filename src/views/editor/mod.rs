@@ -1127,11 +1127,11 @@ impl TextLayoutProvider for Editor {
         Editor::text(self)
     }
 
-    fn new_text_layout(&self, mut line: usize) -> Arc<TextLayoutLine> {
+    fn new_text_layout(&self, line: usize) -> Arc<TextLayoutLine> {
         // TODO: we could share text layouts between different editor views given some knowledge of
         // their wrapping
         let doc = self.doc();
-        line = doc.visual_line_of_line(line);
+        // line = doc.visual_line_of_line(line);
         new_text_layout(doc, line)
     }
 
@@ -1149,7 +1149,7 @@ impl TextLayoutProvider for Editor {
     //         .has_multiline_phantom(self.id(), &self.es.get_untracked())
     // }
 }
-
+#[allow(dead_code)]
 pub struct EditorFontSizes {
     id: EditorId,
     style: ReadSignal<Rc<dyn Styling>>,
@@ -1411,7 +1411,7 @@ impl CursorInfo {
 }
 
 
-fn new_text_layout(doc: Rc<dyn Document>, mut line: usize) -> Arc<TextLayoutLine> {
+fn new_text_layout(doc: Rc<dyn Document>, line: usize) -> Arc<TextLayoutLine> {
     // TODO: we could share text layouts between different editor views given some knowledge of
     // their wrapping
     let style = doc.clone();
@@ -1419,7 +1419,7 @@ fn new_text_layout(doc: Rc<dyn Document>, mut line: usize) -> Arc<TextLayoutLine
     let viewport = doc.viewport().get_untracked();
 
     let text = doc.rope_text();
-    line = doc.visual_line_of_line(line);
+    // line = doc.visual_line_of_line(line);
 
     let mut line_content = String::new();
     // Get the line content with newline characters replaced with spaces

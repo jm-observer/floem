@@ -182,9 +182,9 @@ impl Document for TextDocument {
         todo!()
     }
 
-    fn visual_line_of_line(&self, line: usize) -> usize {
-        line
-    }
+    // fn visual_line_of_line(&self, line: usize) -> usize {
+    //     line
+    // }
 
     fn preedit(&self) -> PreeditData {
         self.preedit.clone()
@@ -414,7 +414,7 @@ impl Styling for TextDocument {
         todo!()
     }
 
-    fn line_styles(&self, line: usize) -> Vec<(usize, usize, Color)> {
+    fn line_styles(&self, _line: usize) -> Vec<(usize, usize, Color)> {
         todo!()
     }
 }

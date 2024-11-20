@@ -287,7 +287,7 @@ fn move_right(
 
     // new_offset
 }
-
+#[allow(dead_code)]
 fn find_prev_rvline(_view: &Editor, start: RVLine, count: usize) -> Option<RVLine> {
     if count == 0 {
         return Some(start);
@@ -367,6 +367,7 @@ fn move_up(
     // (new_offset, horiz)
 }
 
+#[allow(dead_code)]
 /// Move down for when the cursor is on the last visual line.
 fn move_down_last_rvline(
     view: &Editor,
@@ -804,14 +805,15 @@ mod tests {
     use super::Editor;
 
     fn make_ed(text: &str) -> Editor {
-        let cx = Scope::new();
-        let doc = Rc::new(TextDocument::new(cx, text));
-        let style = Rc::new(SimpleStyling::new());
-        let editor = Editor::new(cx, doc, style, false);
-        editor
-            .viewport
-            .set(Rect::ZERO.with_size(Size::new(f64::MAX, f64::MAX)));
-        editor
+        // let cx = Scope::new();
+        // let doc = Rc::new(TextDocument::new(cx, text));
+        // let style = Rc::new(SimpleStyling::new());
+        // let editor = Editor::new(cx, doc, style, false);
+        // editor
+        //     .viewport
+        //     .set(Rect::ZERO.with_size(Size::new(f64::MAX, f64::MAX)));
+        // editor
+        todo!()
     }
 
     // Tests for movement logic.

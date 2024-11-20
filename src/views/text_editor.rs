@@ -15,7 +15,7 @@ use crate::{
         command::CommandExecuted,
         id::EditorId,
         keypress::default_key_handler,
-        text::{Document, SimpleStyling, Styling},
+        text::{Document, Styling},
         text_document::{OnUpdate, PreCommand, TextDocument},
         view::editor_container_view,
         Editor,
@@ -453,7 +453,7 @@ impl TextEditor {
     }
 
     /// Use an `Rc<dyn Styling>` to share between different editors.
-    pub fn styling_rc(self, styling: Rc<dyn Styling>) -> Self {
+    pub fn styling_rc(self, _styling: Rc<dyn Styling>) -> Self {
         todo!()
         // self.editor.update_styling(styling);
         // self

@@ -955,7 +955,7 @@ pub fn editor_view(
     let editor_window_origin = ed.window_origin;
     let cursor = ed.cursor;
     let ime_allowed = ed.ime_allowed;
-    let editor_viewport = ed.viewport;
+    let editor_viewport = ed.viewport.read_only();
     create_effect(move |_| {
         let active = is_active.get();
         if active {
@@ -1144,7 +1144,7 @@ fn editor_content(
     let scroll_delta = ed.scroll_delta;
     let scroll_to = ed.scroll_to;
     let window_origin = ed.window_origin;
-    let viewport = ed.viewport;
+    let viewport = ed.viewport.read_only();
 
     scroll({
         let editor_content_view =
