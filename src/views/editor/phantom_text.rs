@@ -497,7 +497,7 @@ pub struct PhantomTextMultiLine {
     // 所有合并在该行的最后展现的长度，包括幽灵文本、换行符、包括后续的折叠行
     final_text_len: usize,
     // 各个原始行的原始长度、最后展现的长度
-    pub len_of_line: HashMap<usize, (usize, usize)>,
+    pub len_of_line: Vec<(usize, usize)>,
     /// This uses a smallvec because most lines rarely have more than a couple phantom texts
     pub text: SmallVec<[PhantomText; 6]>,
     // 可以去掉，仅做记录
@@ -514,8 +514,8 @@ impl PhantomTextMultiLine {
                 a.merge_col.cmp(&b.merge_col)
             }
         });
-        let mut len_of_line = HashMap::new();
-        len_of_line.insert(line.line, (line.origin_text_len, line.final_text_len));
+        let mut len_of_line = Vec::new();
+        len_of_line.push((line.origin_text_len, line.final_text_len));
         Self {
             line: line.line,
             last_line: line.line,
@@ -527,7 +527,14 @@ impl PhantomTextMultiLine {
     }
 
     pub fn merge(&mut self, line: PhantomTextLine) {
-        self.len_of_line.insert(line.line, (line.origin_text_len, line.final_text_len));
+        let index = self.len_of_line.len();
+        let last_len = self.len_of_line[index - 1];
+        for _ in index..line.line-self.line {
+            self.len_of_line.push(last_len);
+        }
+        self.len_of_line.push((line.origin_text_len, line.final_text_len));
+
+
         let origin_text_len = self.origin_text_len;
         self.origin_text_len += line.origin_text_len;
         let final_text_len = self.final_text_len;
@@ -656,18 +663,27 @@ impl PhantomTextMultiLine {
         if self.text.is_empty() {
             return pre_col;
         }
-        if let Some((origin_len, _)) = self.len_of_line.get(&line) {
-            pre_col = pre_col.min(*origin_len - 1);
+        if line == 5 {
+            println!("");
         }
+
+        let origin_len = self.len_of_line[line - self.line].0;
+        pre_col = pre_col.min(origin_len - 1);
         let mut same_line = self.line == line;
         // let mut current_line = self.visual_line - 1;
         for (index, text) in self.text.iter().enumerate() {
             if !same_line {
                 if let Some(next_line) = text.next_line() {
                     same_line = next_line == line;
-                    // current_line = next_line;
+                    let folded = next_line > line;
+                    if folded {
+                        pre_col = origin_len - 1;
+                    } else {
+                        continue
+                    }
+                } else {
+                    continue
                 }
-                continue;
             }
             if let PhantomTextKind::LineFoldedRang {..} = &text.kind {
                 if pre_col < text.col {
@@ -1236,6 +1252,16 @@ mod test {
             }
             {
                 let index = 18;
+                assert_eq!(line.final_col_of_col(col_line, index, false), 11);
+            }
+        }
+        {
+            //  "0         10        20        30
+            //  "0123456789012345678901234567890123456789
+            //2 "    } else {nr"
+            let col_line = 2;
+            {
+                let index = 1;
                 assert_eq!(line.final_col_of_col(col_line, index, false), 11);
             }
         }
