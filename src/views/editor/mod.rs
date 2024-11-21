@@ -184,7 +184,7 @@ impl Editor {
         // });
         // let lines = Rc::new(Lines::new(cx, font_sizes));
 
-        let screen_lines = cx.create_rw_signal(ScreenLines::new(cx, viewport.get_untracked()));
+        let screen_lines = cx.create_rw_signal(ScreenLines::new(cx, viewport));
 
 
         let ed = Editor {
@@ -366,16 +366,16 @@ impl Editor {
     }
 
     pub fn update_lines(&self) {
-        let ed = self.clone();
-        batch(|| {
-            if ed.lines.try_update(|x| x.update(&ed)).unwrap_or(false) {
-                ed.screen_lines.update(|screen_lines| {
-                    let new_screen_lines =
-                        ed.compute_screen_lines(screen_lines.base);
-                    *screen_lines = new_screen_lines;
-                });
-            }
-        });
+        // let ed = self.clone();
+        // batch(|| {
+        //     if ed.lines.try_update(|x| x.update(&ed)).unwrap_or(false) {
+        //         ed.screen_lines.update(|screen_lines| {
+        //             let new_screen_lines =
+        //                 ed.compute_screen_lines(screen_lines.base);
+        //             *screen_lines = new_screen_lines;
+        //         });
+        //     }
+        // });
 
     }
 
@@ -425,12 +425,12 @@ impl Editor {
         self.doc().receive_char(self, c)
     }
 
-    fn compute_screen_lines(&self, base: RwSignal<ScreenLinesBase>) -> ScreenLines {
-        // This function *cannot* access `ScreenLines` with how it is currently implemented.
-        // This is being called from within an update to screen lines.
-
-        self.doc().compute_screen_lines(self, base)
-    }
+    // fn compute_screen_lines(&self, base: RwSignal<ScreenLinesBase>) -> ScreenLines {
+    //     // This function *cannot* access `ScreenLines` with how it is currently implemented.
+    //     // This is being called from within an update to screen lines.
+    //
+    //     self.doc().compute_screen_lines(self, base)
+    // }
 
     /// Default handler for `PointerDown` event
     pub fn pointer_down(&self, pointer_event: &PointerInputEvent) {
@@ -1197,16 +1197,16 @@ fn create_view_effects(cx: Scope, ed: &Editor) {
         });
     }
 
-    let update_screen_lines = |ed: &Editor| {
+    let update_screen_lines = |_ed: &Editor| {
         // This function should not depend on the viewport signal directly.
 
         // This is wrapped in an update to make any updates-while-updating very obvious
         // which they wouldn't be if we computed and then `set`.
-        ed.screen_lines.update(|screen_lines| {
-            let new_screen_lines = ed.compute_screen_lines(screen_lines.base);
-
-            *screen_lines = new_screen_lines;
-        });
+        // ed.screen_lines.update(|screen_lines| {
+        //     let new_screen_lines = ed.compute_screen_lines(screen_lines.base);
+        //
+        //     *screen_lines = new_screen_lines;
+        // });
     };
 
     // Listen for layout events, currently only when a layout is created, and update screen
@@ -1266,10 +1266,10 @@ fn create_view_effects(cx: Scope, ed: &Editor) {
         let base = ed.screen_lines.with_untracked(|sl| sl.base);
 
         // TODO: should this be a with or with_untracked?
-        if viewport != base.with_untracked(|base| base.active_viewport) {
+        if viewport != base.get_untracked() {
             batch(|| {
                 base.update(|base| {
-                    base.active_viewport = viewport;
+                    *base = viewport;
                 });
                 // TODO: Can I get rid of this and just call update screen lines with an
                 // untrack around it?

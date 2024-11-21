@@ -62,21 +62,22 @@ pub struct ScreenLines {
     /// You should likely use accessor functions rather than this directly.
     pub info: Rc<HashMap<RVLine, LineInfo>>,
     pub diff_sections: Option<Rc<Vec<DiffSection>>>,
-    /// The base y position that all the y positions inside `info` are relative to.  
-    /// This exists so that if a text layout is created outside of the view, we don't have to
-    /// completely recompute the screen lines (or do somewhat intricate things to update them)
-    /// we simply have to update the `base_y`.
-    pub base: RwSignal<ScreenLinesBase>,
+    // The base y position that all the y positions inside `info` are relative to.
+    // This exists so that if a text layout is created outside of the view, we don't have to
+    // completely recompute the screen lines (or do somewhat intricate things to update them)
+    // we simply have to update the `base_y`.
+    pub base: RwSignal<Rect>,
 }
 impl ScreenLines {
-    pub fn new(cx: Scope, viewport: Rect) -> ScreenLines {
+    pub fn new(_cx: Scope, viewport: RwSignal<Rect>) -> ScreenLines {
         ScreenLines {
             lines: Default::default(),
             info: Default::default(),
             diff_sections: Default::default(),
-            base: cx.create_rw_signal(ScreenLinesBase {
-                active_viewport: viewport,
-            }),
+            base: viewport
+            // base: cx.create_rw_signal(ScreenLinesBase {
+            //     active_viewport: viewport,
+            // }),
         }
     }
 
@@ -88,9 +89,7 @@ impl ScreenLines {
         self.lines = Default::default();
         self.info = Default::default();
         self.diff_sections = Default::default();
-        self.base.set(ScreenLinesBase {
-            active_viewport: viewport,
-        });
+        self.base.set(viewport);
     }
 
     /// Get the line info for the given rvline.  
@@ -339,9 +338,9 @@ pub struct LineInfo {
 }
 
 impl LineInfo {
-    pub fn with_base(mut self, base: ScreenLinesBase) -> Self {
-        self.y += base.active_viewport.y0;
-        self.vline_y += base.active_viewport.y0;
+    pub fn with_base(mut self, active_viewport: Rect) -> Self {
+        self.y += active_viewport.y0;
+        self.vline_y += active_viewport.y0;
         self
     }
 }
