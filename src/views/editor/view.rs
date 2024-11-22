@@ -34,14 +34,14 @@ use crate::views::editor::visual_line::VLine;
 
 use super::{CHAR_WIDTH, Editor};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DiffSectionKind {
     NoCode,
     Added,
     Removed,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct DiffSection {
     /// The y index that the diff section is at.  
     /// This is multiplied by the line height to get the y position.  
@@ -56,7 +56,7 @@ pub struct DiffSection {
 // we don't really have support for diffs in floem-editor! Is there a better design for this?
 // Possibly we should just move that out to a separate field on Lapce's editor.
 #[derive(Clone, PartialEq)]
-pub struct ScreenLines {
+pub(crate) struct ScreenLines {
     pub lines: Vec<RVLine>,
     /// Guaranteed to have an entry for each `VLine` in `lines`  
     /// You should likely use accessor functions rather than this directly.
