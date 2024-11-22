@@ -700,13 +700,12 @@ impl PhantomTextMultiLine {
                 } else if text.next_line().is_some() || index == self.text.len() - 1 {
                     return text.next_final_col() + pre_col - text.next_origin_col()
                 }
-
             } else if pre_col < text.col {
-                    return text.final_col - (text.col - pre_col);
-                } else if text.next_line().is_some() || index == self.text.len() - 1 {
-                    // end
-                    return text.next_final_col() + pre_col - text.col
-                }
+                return text.final_col - (text.col - pre_col);
+            } else if text.next_line().is_some() || index == self.text.len() - 1 {
+                // end
+                return text.next_final_col() + pre_col - text.col
+            }
         }
 
         self.log("final_col_after_force");
@@ -742,7 +741,7 @@ impl PhantomTextMultiLine {
             if col < phantom_final_start {
                 return (line, origin_start + (col - final_start));
             } else if phantom_final_start <= col && col <= phantom_final_end {
-                return (line, text.col - 1)
+                return (line, text.col)
             }
 
             origin_start = text.next_origin_col();
@@ -1079,11 +1078,11 @@ mod test {
         }
     }
 
-#[test]
+    #[test]
     fn check_origin_position_of_final_col() {
         _check_folded_origin_position_of_final_col();
-    _check_let_origin_position_of_final_col();
-    _check_folded_origin_position_of_final_col_1();
+        _check_let_origin_position_of_final_col();
+        _check_folded_origin_position_of_final_col_1();
     }
     fn _check_let_origin_position_of_final_col() {
         // "0         10        20        30
@@ -1102,7 +1101,7 @@ mod test {
         }
         {
             assert_eq!(orgin_text[11], 'A');
-            assert_eq!(let_line.origin_position_of_final_col(11).1, 8);
+            assert_eq!(let_line.origin_position_of_final_col(11).1, 9);
         }
         {
             assert_eq!(orgin_text[17], ';');
@@ -1139,7 +1138,7 @@ mod test {
         {
             let index = 12;
             assert_eq!(orgin_text[index], '{');
-            assert_eq!(line.origin_position_of_final_col(index), (1, 11));
+            assert_eq!(line.origin_position_of_final_col(index), (1, 12));
         }
         {
             let index = 19;
@@ -1169,7 +1168,7 @@ mod test {
         {
             let index = 12;
             assert_eq!(orgin_text[index], '{');
-            assert_eq!(line.origin_position_of_final_col(index), (1, 11));
+            assert_eq!(line.origin_position_of_final_col(index), (1, 12));
         }
         {
             let index = 19;
@@ -1179,7 +1178,7 @@ mod test {
         {
             let index = 25;
             assert_eq!(orgin_text[index], '.');
-            assert_eq!(line.origin_position_of_final_col(index), (3, 10));
+            assert_eq!(line.origin_position_of_final_col(index), (3, 11));
         }
         {
             let index = 29;
