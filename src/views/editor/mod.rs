@@ -41,7 +41,7 @@ use self::{
     id::EditorId,
     layout::TextLayoutLine,
     text::{Document, Preedit, PreeditData, Styling, WrapMethod},
-    view::{ScreenLines, ScreenLinesBase},
+    view::{ScreenLines},
     visual_line::{
         ConfigId, FontSizeCacheId, hit_position_aff, ResolvedWrap, RVLine,
         TextLayoutProvider, VLine, VLineInfo,

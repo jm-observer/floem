@@ -56,7 +56,7 @@ pub struct DiffSection {
 // we don't really have support for diffs in floem-editor! Is there a better design for this?
 // Possibly we should just move that out to a separate field on Lapce's editor.
 #[derive(Clone, PartialEq)]
-pub(crate) struct ScreenLines {
+pub struct ScreenLines {
     pub lines: Vec<RVLine>,
     /// Guaranteed to have an entry for each `VLine` in `lines`  
     /// You should likely use accessor functions rather than this directly.
@@ -81,9 +81,9 @@ impl ScreenLines {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty()
-    }
+    // pub fn is_empty(&self) -> bool {
+    //     self.lines.is_empty()
+    // }
 
     pub fn clear(&mut self, viewport: Rect) {
         self.lines = Default::default();
@@ -100,13 +100,13 @@ impl ScreenLines {
         Some(info.clone().with_base(base))
     }
 
-    pub fn vline_info(&self, rvline: RVLine) -> Option<VLineInfo<VLine>> {
-        self.info.get(&rvline).map(|info| info.vline_info)
-    }
+    // pub fn vline_info(&self, rvline: RVLine) -> Option<VLineInfo<VLine>> {
+    //     self.info.get(&rvline).map(|info| info.vline_info)
+    // }
 
-    pub fn rvline_range(&self) -> Option<(RVLine, RVLine)> {
-        self.lines.first().copied().zip(self.lines.last().copied())
-    }
+    // pub fn rvline_range(&self) -> Option<(RVLine, RVLine)> {
+    //     self.lines.first().copied().zip(self.lines.last().copied())
+    // }
 
     /// Iterate over the line info, copying them with the full y positions.  
     pub fn iter_line_info(&self) -> impl Iterator<Item = LineInfo> + '_ {
@@ -180,27 +180,27 @@ impl ScreenLines {
     //     start_line..=end_line
     // }
 
-    /// Iterate over the real lines underlying the visual lines on the screen with the y position
-    /// of their layout.  
-    /// (line, y)
-    /// 应该为视觉行
-    pub fn iter_lines_y(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
-        let mut last_line = None;
-        self.lines.iter().filter_map(move |vline| {
-            let info = self.info(*vline).unwrap();
-
-            let line = info.vline_info.origin_line;
-
-            if last_line == Some(line) {
-                // We've already considered this line.
-                return None;
-            }
-
-            last_line = Some(line);
-
-            Some((line, info.y))
-        })
-    }
+    // /// Iterate over the real lines underlying the visual lines on the screen with the y position
+    // /// of their layout.
+    // /// (line, y)
+    // /// 应该为视觉行
+    // pub fn iter_lines_y(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
+    //     let mut last_line = None;
+    //     self.lines.iter().filter_map(move |vline| {
+    //         let info = self.info(*vline).unwrap();
+    //
+    //         let line = info.vline_info.origin_line;
+    //
+    //         if last_line == Some(line) {
+    //             // We've already considered this line.
+    //             return None;
+    //         }
+    //
+    //         last_line = Some(line);
+    //
+    //         Some((line, info.y))
+    //     })
+    // }
 
     pub fn iter_line_info_y(&self) -> impl Iterator<Item = LineInfo> + '_ {
         self.lines.iter().map(move |vline| {
@@ -209,10 +209,10 @@ impl ScreenLines {
     }
 
 
-    /// Get the earliest line info for a given line.
-    pub fn info_for_line(&self, line: usize) -> Option<LineInfo> {
-        self.info(self.first_rvline_for_line(line)?)
-    }
+    // /// Get the earliest line info for a given line.
+    // pub fn info_for_line(&self, line: usize) -> Option<LineInfo> {
+    //     self.info(self.first_rvline_for_line(line)?)
+    // }
 
     /// Get the earliest rvline for the given line
     pub fn first_rvline_for_line(&self, line: usize) -> Option<RVLine> {
@@ -307,10 +307,10 @@ impl ScreenLines {
     //     true
     // }
 
-    pub fn log(&self) {
-        tracing::info!("{:?}", self.lines);
-        tracing::info!("{:?}", self.info);
-    }
+    // pub fn log(&self) {
+    //     tracing::info!("{:?}", self.lines);
+    //     tracing::info!("{:?}", self.info);
+    // }
 }
 
 #[derive(Debug, Clone, PartialEq)]

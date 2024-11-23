@@ -99,6 +99,7 @@ pub enum PhantomTextKind {
     // 行内折叠。跨行折叠也都转换成行内折叠
     LineFoldedRang {
         next_line: Option<usize>,
+        // 被折叠的长度
         len: usize,
     },
     // 折叠的起始位置。折叠是否跨行、结束位置的行、列位置
