@@ -148,6 +148,7 @@
 //! - [Understanding Ids](crate::id)
 //! - [How the update lifecycle works](crate::renderer)
 //!
+#![allow(unused_imports)]
 pub mod action;
 pub mod animate;
 mod app;

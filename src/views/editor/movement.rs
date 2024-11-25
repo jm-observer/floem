@@ -804,7 +804,7 @@ mod tests {
 
     use super::Editor;
 
-    fn make_ed(text: &str) -> Editor {
+    fn make_ed(_text: &str) -> Editor {
         // let cx = Scope::new();
         // let doc = Rc::new(TextDocument::new(cx, text));
         // let style = Rc::new(SimpleStyling::new());

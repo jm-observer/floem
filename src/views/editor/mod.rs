@@ -21,7 +21,6 @@ use floem_editor_core::{
     selection::Selection,
 };
 use floem_reactive::{SignalGet, SignalTrack, SignalUpdate, SignalWith, Trigger};
-use floem_renderer::text::FONT_SYSTEM;
 pub use prop::*;
 
 use crate::{
@@ -1108,7 +1107,7 @@ impl std::fmt::Debug for Editor {
 //     }
 // }
 
-fn push_strip_suffix(line_content_original: &str, rs: &mut String) {
+fn _push_strip_suffix(line_content_original: &str, rs: &mut String) {
     if let Some(s) = line_content_original.strip_suffix("\r\n") {
         rs.push_str(s);
         rs.push_str("  ");
@@ -1411,85 +1410,85 @@ impl CursorInfo {
 }
 
 
-fn new_text_layout(doc: Rc<dyn Document>, line: usize) -> Arc<TextLayoutLine> {
-    // TODO: we could share text layouts between different editor views given some knowledge of
-    // their wrapping
-    let style = doc.clone();
-    let es = doc.editor_style().get_untracked();
-    let viewport = doc.viewport().get_untracked();
-
-    let text = doc.rope_text();
-    // line = doc.visual_line_of_line(line);
-
-    let mut line_content = String::new();
-    // Get the line content with newline characters replaced with spaces
-    // and the content without the newline characters
-    // TODO: cache or add some way that text layout is created to auto insert the spaces instead
-    // though we immediately combine with phantom text so that's a thing.
-    let line_content_original = text.line_content(line);
-    let mut font_system = FONT_SYSTEM.lock();
-    push_strip_suffix(&line_content_original, &mut line_content);
-
-    let family = style.font_family(line);
-    let font_size = style.font_size(line);
-    let attrs = Attrs::new()
-        .color(es.ed_text_color())
-        .family(&family)
-        .font_size(font_size as f32)
-        .line_height(LineHeightValue::Px(style.line_height(line)));
-
-    let phantom_text = doc.phantom_text(&es, line);
-    let mut collapsed_line_col = phantom_text.folded_line();
-    let multi_styles: Vec<(usize, usize, Color, Attrs)> = style
-        .line_styles(line)
-        .into_iter()
-        .map(|(start, end, color)| (start, end, color, attrs))
-        .collect();
-
-    let mut phantom_text = PhantomTextMultiLine::new(phantom_text);
-    let mut attrs_list = AttrsList::new(attrs);
-    for (start, end, color, attrs) in multi_styles.into_iter() {
-        let (Some(start), Some(end)) = (phantom_text.col_at(start), phantom_text.col_at(end))
-        else {
-            continue;
-        };
-        attrs_list.add_span(start..end, attrs.color(color));
-    }
-
-    while let Some(collapsed_line) = collapsed_line_col.take() {
-        push_strip_suffix(&text.line_content(collapsed_line), &mut line_content);
-
-        let offset_col = phantom_text.final_text_len();
-        let family = style.font_family(line);
-        let font_size = style.font_size(line) as f32;
-        let attrs = Attrs::new()
-            .color(es.ed_text_color())
-            .family(&family)
-            .font_size(font_size)
-            .line_height(LineHeightValue::Px(style.line_height(line)));
-        // let (next_phantom_text, collapsed_line_content, styles, next_collapsed_line_col)
-        //     = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col, attrs);
-
-        let next_phantom_text = doc.phantom_text(&es, collapsed_line);
-        collapsed_line_col = next_phantom_text.folded_line();
-        let styles: Vec<(usize, usize, Color, Attrs)> = style
-            .line_styles(collapsed_line)
-            .into_iter()
-            .map(|(start, end, color)| (start + offset_col, end + offset_col, color, attrs))
-            .collect();
-
-        for (start, end, color, attrs) in styles.into_iter() {
-            let (Some(start), Some(end)) =
-                (phantom_text.col_at(start), phantom_text.col_at(end))
-            else {
-                continue;
-            };
-            attrs_list.add_span(start..end, attrs.color(color));
-        }
-        phantom_text.merge(next_phantom_text);
-    }
-    let phantom_color = es.phantom_color();
-    phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
+fn new_text_layout(_doc: Rc<dyn Document>, _line: usize) -> Arc<TextLayoutLine> {
+    // // TODO: we could share text layouts between different editor views given some knowledge of
+    // // their wrapping
+    // let style = doc.clone();
+    // let es = doc.editor_style().get_untracked();
+    // let viewport = doc.viewport().get_untracked();
+    //
+    // let text = doc.rope_text();
+    // // line = doc.visual_line_of_line(line);
+    //
+    // let mut line_content = String::new();
+    // // Get the line content with newline characters replaced with spaces
+    // // and the content without the newline characters
+    // // TODO: cache or add some way that text layout is created to auto insert the spaces instead
+    // // though we immediately combine with phantom text so that's a thing.
+    // let line_content_original = text.line_content(line);
+    // let mut font_system = FONT_SYSTEM.lock();
+    // push_strip_suffix(&line_content_original, &mut line_content);
+    //
+    // let family = style.font_family(line);
+    // let font_size = style.font_size(line);
+    // let attrs = Attrs::new()
+    //     .color(es.ed_text_color())
+    //     .family(&family)
+    //     .font_size(font_size as f32)
+    //     .line_height(LineHeightValue::Px(style.line_height(line)));
+    //
+    // let phantom_text = doc.phantom_text(&es, line);
+    // let mut collapsed_line_col = phantom_text.folded_line();
+    // let multi_styles: Vec<(usize, usize, Color, Attrs)> = style
+    //     .line_styles(line)
+    //     .into_iter()
+    //     .map(|(start, end, color)| (start, end, color, attrs))
+    //     .collect();
+    //
+    // let mut phantom_text = PhantomTextMultiLine::new(phantom_text);
+    // let mut attrs_list = AttrsList::new(attrs);
+    // for (start, end, color, attrs) in multi_styles.into_iter() {
+    //     let (Some(start), Some(end)) = (phantom_text.col_at(start), phantom_text.col_at(end))
+    //     else {
+    //         continue;
+    //     };
+    //     attrs_list.add_span(start..end, attrs.color(color));
+    // }
+    //
+    // while let Some(collapsed_line) = collapsed_line_col.take() {
+    //     push_strip_suffix(&text.line_content(collapsed_line), &mut line_content);
+    //
+    //     let offset_col = phantom_text.final_text_len();
+    //     let family = style.font_family(line);
+    //     let font_size = style.font_size(line) as f32;
+    //     let attrs = Attrs::new()
+    //         .color(es.ed_text_color())
+    //         .family(&family)
+    //         .font_size(font_size)
+    //         .line_height(LineHeightValue::Px(style.line_height(line)));
+    //     // let (next_phantom_text, collapsed_line_content, styles, next_collapsed_line_col)
+    //     //     = calcuate_line_text_and_style(collapsed_line, &next_line_content, style.clone(), edid, &es, doc.clone(), offset_col, attrs);
+    //
+    //     let next_phantom_text = doc.phantom_text(&es, collapsed_line);
+    //     collapsed_line_col = next_phantom_text.folded_line();
+    //     let styles: Vec<(usize, usize, Color, Attrs)> = style
+    //         .line_styles(collapsed_line)
+    //         .into_iter()
+    //         .map(|(start, end, color)| (start + offset_col, end + offset_col, color, attrs))
+    //         .collect();
+    //
+    //     for (start, end, color, attrs) in styles.into_iter() {
+    //         let (Some(start), Some(end)) =
+    //             (phantom_text.col_at(start), phantom_text.col_at(end))
+    //         else {
+    //             continue;
+    //         };
+    //         attrs_list.add_span(start..end, attrs.color(color));
+    //     }
+    //     phantom_text.merge(next_phantom_text);
+    // }
+    // let phantom_color = es.phantom_color();
+    // phantom_text.add_phantom_style(&mut attrs_list, attrs, font_size, phantom_color);
 
     // if line == 1 {
     //     tracing::info!("start");
@@ -1501,73 +1500,74 @@ fn new_text_layout(doc: Rc<dyn Document>, line: usize) -> Arc<TextLayoutLine> {
 
     // tracing::info!("{line} {line_content}");
     // TODO: we could move tab width setting to be done by the document
-    let final_line_content = phantom_text.final_line_content(&line_content);
-    let mut text_layout = TextLayout::new_with_font_system(
-        line,
-        &final_line_content,
-        attrs_list,
-        &mut font_system,
-    );
-    drop(font_system);
-    // text_layout.set_tab_width(style.tab_width(edid, line));
-
-    // dbg!(self.editor_style.with(|s| s.wrap_method()));
-    match es.wrap_method() {
-        WrapMethod::None => {}
-        WrapMethod::EditorWidth => {
-            let width = viewport.width();
-            text_layout.set_wrap(Wrap::WordOrGlyph);
-            text_layout.set_size(width as f32, f32::MAX);
-        }
-        WrapMethod::WrapWidth { width } => {
-            text_layout.set_wrap(Wrap::WordOrGlyph);
-            text_layout.set_size(width, f32::MAX);
-        }
-        // TODO:
-        WrapMethod::WrapColumn { .. } => {}
-    }
-
-    // let whitespaces = Self::new_whitespace_layout(
-    //     &line_content_original,
-    //     &text_layout,
-    //     &phantom_text,
-    //     es.render_whitespace(),
+    // let final_line_content = phantom_text.final_line_content(&line_content);
+    // let mut text_layout = TextLayout::new_with_font_system(
+    //     line,
+    //     &final_line_content,
+    //     attrs_list,
+    //     &mut font_system,
     // );
-    // tracing::info!("line={line} {:?}", whitespaces);
-    let indent_line = style.indent_line(line, &line_content_original);
-
-    // let indent = if indent_line != line {
-    //     // TODO: This creates the layout if it isn't already cached, but it doesn't cache the
-    //     // result because the current method of managing the cache is not very smart.
-    //     let layout = self.try_get_text_layout(indent_line).unwrap_or_else(|| {
-    //         self.new_text_layout(
-    //             indent_line,
-    //             style.font_size(edid, indent_line),
-    //             self.lines.wrap(),
-    //         )
-    //     });
-    //     layout.indent + 1.0
-    // } else {
-    //     let offset = text.first_non_blank_character_on_line(indent_line);
-    //     let (_, col) = text.offset_to_line_col(offset);
-    //     text_layout.hit_position(col).point.x
-    // };
-    let offset = text.first_non_blank_character_on_line(indent_line);
-    let (_, col) = text.offset_to_line_col(offset);
-    let indent = text_layout.hit_position(col).point.x;
-
-    let layout_line = TextLayoutLine {
-        text: text_layout,
-        extra_style: Vec::new(),
-        whitespaces: None,
-        indent,
-        phantom_text,
-    };
-    // todo 下划线等？
-    // let extra_style = style.apply_layout_styles(&layout_line.text, &layout_line.phantom_text, 0);
+    // drop(font_system);
+    // // text_layout.set_tab_width(style.tab_width(edid, line));
     //
-    // layout_line.extra_style.clear();
-    // layout_line.extra_style.extend(extra_style);
-
-    Arc::new(layout_line)
+    // // dbg!(self.editor_style.with(|s| s.wrap_method()));
+    // match es.wrap_method() {
+    //     WrapMethod::None => {}
+    //     WrapMethod::EditorWidth => {
+    //         let width = viewport.width();
+    //         text_layout.set_wrap(Wrap::WordOrGlyph);
+    //         text_layout.set_size(width as f32, f32::MAX);
+    //     }
+    //     WrapMethod::WrapWidth { width } => {
+    //         text_layout.set_wrap(Wrap::WordOrGlyph);
+    //         text_layout.set_size(width, f32::MAX);
+    //     }
+    //     // TODO:
+    //     WrapMethod::WrapColumn { .. } => {}
+    // }
+    //
+    // // let whitespaces = Self::new_whitespace_layout(
+    // //     &line_content_original,
+    // //     &text_layout,
+    // //     &phantom_text,
+    // //     es.render_whitespace(),
+    // // );
+    // // tracing::info!("line={line} {:?}", whitespaces);
+    // let indent_line = style.indent_line(line, &line_content_original);
+    //
+    // // let indent = if indent_line != line {
+    // //     // TODO: This creates the layout if it isn't already cached, but it doesn't cache the
+    // //     // result because the current method of managing the cache is not very smart.
+    // //     let layout = self.try_get_text_layout(indent_line).unwrap_or_else(|| {
+    // //         self.new_text_layout(
+    // //             indent_line,
+    // //             style.font_size(edid, indent_line),
+    // //             self.lines.wrap(),
+    // //         )
+    // //     });
+    // //     layout.indent + 1.0
+    // // } else {
+    // //     let offset = text.first_non_blank_character_on_line(indent_line);
+    // //     let (_, col) = text.offset_to_line_col(offset);
+    // //     text_layout.hit_position(col).point.x
+    // // };
+    // let offset = text.first_non_blank_character_on_line(indent_line);
+    // let (_, col) = text.offset_to_line_col(offset);
+    // let indent = text_layout.hit_position(col).point.x;
+    //
+    // let layout_line = TextLayoutLine {
+    //     text: text_layout,
+    //     extra_style: Vec::new(),
+    //     whitespaces: None,
+    //     indent,
+    //     phantom_text,
+    // };
+    // // todo 下划线等？
+    // // let extra_style = style.apply_layout_styles(&layout_line.text, &layout_line.phantom_text, 0);
+    // //
+    // // layout_line.extra_style.clear();
+    // // layout_line.extra_style.extend(extra_style);
+    //
+    // Arc::new(layout_line)
+    todo!()
 }
