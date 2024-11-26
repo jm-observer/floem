@@ -310,7 +310,7 @@ impl DocumentPhantom for TextDocument {
             origin_text_len = rope_text.offset_of_line(line + 1) - rope_text.offset_of_line(line);
         }
 
-        PhantomTextLine::new(line, origin_text_len, text)
+        PhantomTextLine::new(line, origin_text_len, 0, text)
     }
 
     // fn multi_phantom_text(&self, edid: EditorId, styling: &EditorStyle, line: usize) -> PhantomTextMultiLine {

@@ -982,7 +982,7 @@ impl Editor {
         let hit_point = text_layout.text.hit_point(Point::new(point.x, y as f64));
         // We have to unapply the phantom text shifting in order to get back to the column in
         // the actual buffer
-        let (line, col) = text_layout.phantom_text.cursor_position_of_final_col(hit_point.index);
+        let (line, col, _) = text_layout.phantom_text.cursor_position_of_final_col(hit_point.index);
         // Ensure that the column doesn't end up out of bounds, so things like clicking on the far
         // right end will just go to the end of the line.
         // let max_col = self.line_end_col(line, mode != Mode::Normal);
@@ -1026,7 +1026,8 @@ impl Editor {
                 let text_layout = self.text_layout_of_visual_line(line);
                 let hit_point = text_layout.text.hit_point(Point::new(x, 0.0));
                 let n = hit_point.index;
-                text_layout.phantom_text.cursor_position_of_final_col(n)
+                let (origin_line, _offset_of_line, offset_buffer) = text_layout.phantom_text.cursor_position_of_final_col(n);
+                (origin_line, offset_buffer)
             }
             ColPosition::End => (line, self.line_end_col(line, caret)),
             ColPosition::Start => (line, 0),
@@ -1054,7 +1055,8 @@ impl Editor {
                     .unwrap_or(0.0);
                 let hit_point = text_layout.text.hit_point(Point::new(x, y_pos as f64));
                 let n = hit_point.index;
-                text_layout.phantom_text.cursor_position_of_final_col(n)
+                let (origin_line, _offset_of_line, offset_buffer) = text_layout.phantom_text.cursor_position_of_final_col(n);
+                (origin_line, offset_buffer)
             }
             // Otherwise it is the same as the other function
             _ => self.line_horiz_col(line, horiz, caret),
@@ -1136,9 +1138,10 @@ impl TextLayoutProvider for Editor {
 
     /// 将列位置转换为合并前的位置，也就是原始文本的位置？意义？
     fn before_phantom_col(&self, line: usize, col: usize) -> (usize, usize) {
-        self.new_text_layout(line)
+        let (origin_line, _offset_of_line, _offset_buffer) = self.new_text_layout(line)
             .phantom_text
-            .cursor_position_of_final_col(col)
+            .cursor_position_of_final_col(col);
+        (origin_line, _offset_of_line)
         // self.doc()
         //     .before_phantom_col(self.id(), &self.es.get_untracked(), line, col)
     }
