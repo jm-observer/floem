@@ -167,10 +167,10 @@ impl Lines {
             for (origin_folded_line_sub_index, layout) in text_layout.text.line_layout().iter().enumerate() {
                 visual_offset_end =  visual_offset_start + layout.glyphs.len();
 
-                let offset_info = text_layout.phantom_text.origin_position_of_final_col(visual_offset_start);
+                let offset_info = text_layout.phantom_text.cursor_position_of_final_col(visual_offset_start);
                 let origin_interval_start = rope_text.offset_of_line_col(offset_info.0, offset_info.1);
 
-                let offset_info = text_layout.phantom_text.origin_position_of_final_col(visual_offset_end);
+                let offset_info = text_layout.phantom_text.cursor_position_of_final_col(visual_offset_end);
                 let origin_interval_end = rope_text.offset_of_line_col(offset_info.0, offset_info.1);
                 let origin_interval = Interval { start: origin_interval_start, end: origin_interval_end };
 
