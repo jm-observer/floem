@@ -47,14 +47,15 @@
 //! - Only one view can be active at a time.
 //! - Only one view can be focused at a time.
 //!
-use crate::text::TextLayout;
 use floem_renderer::gpu_resources::GpuResources;
 use floem_renderer::Img;
 use floem_tiny_skia_renderer::TinySkiaRenderer;
 use floem_vger_renderer::VgerRenderer;
 use image::DynamicImage;
-use peniko::kurbo::{self, Affine, Rect, Shape, Size};
+use peniko::kurbo::{Affine, Rect, Shape, Size};
 use peniko::BrushRef;
+use floem_renderer::text::LayoutRun;
+use crate::kurbo::Point;
 
 #[allow(clippy::large_enum_variant)]
 pub enum Renderer<W> {
@@ -197,13 +198,13 @@ impl<W: wgpu::WindowHandle> floem_renderer::Renderer for Renderer<W> {
         }
     }
 
-    fn draw_text(&mut self, layout: &TextLayout, pos: impl Into<kurbo::Point>) {
+    fn draw_text_with_layout<'b>(&mut self, layout: impl Iterator<Item=LayoutRun<'b>>, pos: impl Into<Point>) {
         match self {
             Renderer::Vger(v) => {
-                v.draw_text(layout, pos);
+                v.draw_text_with_layout(layout, pos);
             }
             Renderer::TinySkia(v) => {
-                v.draw_text(layout, pos);
+                v.draw_text_with_layout(layout, pos);
             }
         }
     }
