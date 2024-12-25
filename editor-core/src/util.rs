@@ -10,6 +10,8 @@ pub fn matching_pair_direction(c: char) -> Option<bool> {
         ')' => false,
         '[' => true,
         ']' => false,
+        '<' => true,
+        '>' => false,
         _ => return None,
     })
 }
@@ -22,6 +24,8 @@ pub fn matching_char(c: char) -> Option<char> {
         ')' => '(',
         '[' => ']',
         ']' => '[',
+        '<' => '>',
+        '>' => '<',
         _ => return None,
     })
 }
@@ -38,6 +42,8 @@ where
         ')' => "(",
         '[' => "]",
         ']' => "[",
+        '<' => ">",
+        '>' => "<",
         _ => return None,
     };
     Some(pair.to_static())
