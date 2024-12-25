@@ -83,7 +83,7 @@ clipboard-win = "3.1.1"
 default = ["editor", "default-image-formats"]
 # TODO: this is only winit and the editor serde, there are other dependencies that still depend on
 # serde
-serde = ["floem-winit/serde", "dep:serde"]
+serde = ["floem-winit/serde", "dep:serde","floem-editor-core?/serde"]
 editor = ["floem-editor-core", "dep:lapce-xi-rope", "dep:strum", "dep:strum_macros", "dep:downcast-rs"]
 
 # Image support
