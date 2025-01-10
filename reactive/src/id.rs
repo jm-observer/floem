@@ -7,13 +7,11 @@ use crate::{effect::observer_clean_up, runtime::RUNTIME, signal::Signal};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub struct Id(u64);
 
-
 #[cfg(feature = "track-panic")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub struct Id(u64, bool);
 
 impl Id {
-
     #[cfg(not(feature = "track-panic"))]
     /// Create a new Id that's next in order
     pub(crate) fn next() -> Id {
@@ -25,13 +23,19 @@ impl Id {
     /// Create a new Id that's next in order
     pub(crate) fn next() -> Id {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        Id(COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed), false)
+        Id(
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            false,
+        )
     }
 
     #[cfg(feature = "track-panic")]
     pub(crate) fn next_with_track() -> Id {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        Id(COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed), true)
+        Id(
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            true,
+        )
     }
 
     /// Try to get the Signal that links with this Id
