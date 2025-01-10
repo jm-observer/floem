@@ -153,9 +153,9 @@ impl EventCx<'_> {
                 {
                     return EventResult::event_stop(child, &event);
                 }
-                if event.is_pointer() {
-                    break;
-                }
+                // if event.is_pointer() {
+                //     break;
+                // }
             }
         }
 
