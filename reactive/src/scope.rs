@@ -70,6 +70,14 @@ impl Scope {
         with_scope(self, || create_rw_signal(value))
     }
 
+    #[cfg(feature = "track-panic")]
+    pub fn create_rw_signal_with_track<T>(self, value: T) -> RwSignal<T>
+    where
+        T: Any + 'static,
+    {
+        with_scope(self, || crate::signal::create_rw_signal_with_track(value))
+    }
+
     /// Create a Memo under this Scope
     pub fn create_memo<T>(self, f: impl Fn(Option<&T>) -> T + 'static) -> Memo<T>
     where

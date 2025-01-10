@@ -137,3 +137,5 @@ tokio = ["dep:tokio"]
 rfd-async-std = ["dep:rfd", "rfd/async-std"]
 rfd-tokio = ["dep:rfd", "rfd/tokio"]
 futures = ["dep:futures"]
+
+track-panic = ["floem_reactive/track-panic"]

@@ -92,6 +92,19 @@ where
     }
 }
 
+#[cfg(feature = "track-panic")]
+pub fn create_rw_signal_with_track<T>(value: T) -> RwSignal<T>
+where
+    T: Any + 'static,
+{
+    let id = Signal::create_with_track(value);
+    id.set_scope();
+    RwSignal {
+        id,
+        ty: PhantomData,
+    }
+}
+
 /// A getter only Signal
 pub struct ReadSignal<T> {
     pub(crate) id: Id,
@@ -163,6 +176,22 @@ impl Signal {
         T: Any + 'static,
     {
         let id = Id::next();
+        let value = RefCell::new(value);
+        let signal = Signal {
+            id,
+            subscribers: Rc::new(RefCell::new(HashMap::new())),
+            value: Rc::new(value),
+        };
+        id.add_signal(signal);
+        id
+    }
+
+    #[cfg(feature = "track-panic")]
+    pub fn create_with_track<T>(value: T) -> Id
+    where
+        T: Any + 'static,
+    {
+        let id = Id::next_with_track();
         let value = RefCell::new(value);
         let signal = Signal {
             id,
