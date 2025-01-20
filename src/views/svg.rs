@@ -82,9 +82,10 @@ impl View for Svg {
             let color = if let Some(brush) = self.svg_style.svg_color() {
                 Some(brush)
             } else {
-                Some(Brush::Solid(
-                    self.svg_style.text_color().unwrap_or(Color::BLACK),
-                ))
+                // Some(Brush::Solid(
+                //     self.svg_style.text_color().unwrap_or(Color::BLACK),
+                // ))
+                None
             };
             cx.draw_svg(floem_renderer::Svg { tree, hash }, rect, color.as_ref());
         }
