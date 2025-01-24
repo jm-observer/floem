@@ -71,3 +71,12 @@ where
         ty: PhantomData,
     }
 }
+#[allow(unused_variables, dead_code)]
+/// Create a Memo which takes the computed value of the given function, and triggers
+/// the reactive system when the computed value is different with the last computed value.
+pub fn create_memo_with_track<T>(f: impl Fn(Option<&T>) -> T + 'static) -> Memo<T>
+where
+    T: PartialEq + 'static,
+{
+    todo!()
+}
