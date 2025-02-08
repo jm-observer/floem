@@ -15,7 +15,8 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use taffy::prelude::NodeId;
-
+use log::{info};
+use slotmap::Key;
 use crate::animate::{AnimStateKind, RepeatMode};
 use crate::easing::{Easing, Linear};
 use crate::renderer::Renderer;
@@ -129,6 +130,13 @@ impl EventCx<'_> {
             false
         };
 
+        let ffi = view_id.data().as_ffi();
+        let is_pointer_down = if let Event::PointerDown(_) = &event {
+            true
+        } else {
+            false
+        };
+
         let is_pointer_none = event.is_pointer()
             && view_state.borrow().computed_style.get(PointerEventsProp)
                 == Some(PointerEvents::None);
@@ -149,6 +157,9 @@ impl EventCx<'_> {
                     }
                 }
             }
+            if is_pointer_down {
+                info!("{}", ffi);
+            }
             return (EventPropagation::Stop, PointerEventConsumed::Yes);
         }
 
@@ -163,6 +174,9 @@ impl EventCx<'_> {
                 let (event_propagation, pointer_event_consumed) =
                     self.unconditional_view_event(child, event.clone(), false);
                 if event_propagation.is_processed() {
+                    if is_pointer_down {
+                        info!("{}", child.data().as_ffi());
+                    }
                     return (EventPropagation::Stop, PointerEventConsumed::Yes);
                 }
                 if event.is_pointer() && pointer_event_consumed == PointerEventConsumed::Yes {
@@ -171,6 +185,9 @@ impl EventCx<'_> {
                     // also, we mark pointer_event_consumed to be yes
                     // so that it will be bublled up the parent
                     view_pointer_event_consumed = PointerEventConsumed::Yes;
+                    if is_pointer_down {
+                        info!("{}", child.data().as_ffi());
+                    }
                     break;
                 }
             }
@@ -183,10 +200,16 @@ impl EventCx<'_> {
                 .event_after_children(self, &event)
                 .is_processed()
         {
+            if is_pointer_down {
+                info!("event_after_children {}", view_id.data().as_ffi());
+            }
             return (EventPropagation::Stop, PointerEventConsumed::Yes);
         }
 
         if is_pointer_none {
+            if is_pointer_down {
+                info!("is_pointer_none {}", view_id.data().as_ffi());
+            }
             // if pointer-events: none, we don't handle the pointer event
             return (EventPropagation::Continue, view_pointer_event_consumed);
         }
@@ -228,6 +251,9 @@ impl EventCx<'_> {
                             let popout_menu = view_state.borrow().popout_menu.clone();
                             if let Some(menu) = popout_menu {
                                 show_context_menu(menu(), Some(bottom_left));
+                                if is_pointer_down {
+                                    info!("show_context_menu {}", view_id.data().as_ffi());
+                                }
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                             if self.app_state.draggable.contains(&view_id)
@@ -308,6 +334,9 @@ impl EventCx<'_> {
                         .apply_event(&EventListener::PointerMove, &event)
                         .is_some_and(|prop| prop.is_processed())
                     {
+                        if is_pointer_down {
+                            info!("PointerMove {}", view_id.data().as_ffi());
+                        }
                         return (EventPropagation::Stop, PointerEventConsumed::Yes);
                     }
                 }
@@ -358,6 +387,9 @@ impl EventCx<'_> {
                                     handled | (handler.borrow_mut())(&event).is_processed()
                                 })
                             {
+                                if is_pointer_down {
+                                    info!("PointerUp {}", view_id.data().as_ffi());
+                                }
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                         }
@@ -370,6 +402,9 @@ impl EventCx<'_> {
                                     handled | (handler.borrow_mut())(&event).is_processed()
                                 })
                             {
+                                if is_pointer_down {
+                                    info!("EventListener::Click {}", view_id.data().as_ffi());
+                                }
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                         }
@@ -378,6 +413,9 @@ impl EventCx<'_> {
                             .apply_event(&EventListener::PointerUp, &event)
                             .is_some_and(|prop| prop.is_processed())
                         {
+                            if is_pointer_down {
+                                info!("PointerUp {}", view_id.data().as_ffi());
+                            }
                             return (EventPropagation::Stop, PointerEventConsumed::Yes);
                         }
                     } else if pointer_event.button.is_secondary() {
@@ -394,6 +432,9 @@ impl EventCx<'_> {
                                     handled | (handler.borrow_mut())(&event).is_processed()
                                 })
                             {
+                                if is_pointer_down {
+                                    info!("is_secondary {}", view_id.data().as_ffi());
+                                }
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                         }
@@ -408,6 +449,9 @@ impl EventCx<'_> {
                         let context_menu = view_state.borrow().context_menu.clone();
                         if let Some(menu) = context_menu {
                             show_context_menu(menu(), Some(viewport_event_position));
+                            if is_pointer_down {
+                                info!("show_context_menu {}", view_id.data().as_ffi());
+                            }
                             return (EventPropagation::Stop, PointerEventConsumed::Yes);
                         }
                     }
@@ -441,13 +485,18 @@ impl EventCx<'_> {
                             handled | (handler.borrow_mut())(&event).is_processed()
                         })
                     {
+                        if is_pointer_down {
+                            info!("handlers {}", view_id.data().as_ffi());
+                        }
                         return (EventPropagation::Stop, PointerEventConsumed::Yes);
                     }
                 }
             }
         }
-
-        (EventPropagation::Continue, PointerEventConsumed::Yes)
+        if is_pointer_down {
+            info!("default {}", view_id.data().as_ffi());
+        }
+        (EventPropagation::Continue, PointerEventConsumed::No)
     }
 
     /// translate a window-positioned event to the local coordinate system of a view

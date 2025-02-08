@@ -7,6 +7,7 @@ use floem::{
     views::{dyn_view, Decorators, LabelClass, LabelCustomStyle},
     IntoView, View,
 };
+use floem::menu::{Menu, MenuItem};
 
 fn app_view() -> impl IntoView {
     let (counter, set_counter) = create_signal(0);
@@ -56,6 +57,36 @@ fn app_view() -> impl IntoView {
                     set_counter.update(|value| *value = 0);
                 })
                 .disabled(move || counter.get() == 0)
+                .style(|s| {
+                    s.box_shadow_blur(5.0)
+                        .border_radius(10.0)
+                        .padding(10.0)
+                        .margin_left(10.0)
+                        .background(palette::css::LIGHT_BLUE)
+                        .focus_visible(|s| s.outline(2.).outline_color(palette::css::BLUE))
+                        .disabled(|s| s.background(palette::css::LIGHT_GRAY))
+                        .hover(|s| s.background(palette::css::LIGHT_YELLOW))
+                        .active(|s| {
+                            s.color(palette::css::WHITE)
+                                .background(palette::css::YELLOW_GREEN)
+                        })
+                })
+                .keyboard_navigable(),
+            "ui"
+                .popout_menu(move || {
+                    println!("!!!!!!!");
+                    Menu::new("Lapce").entry({
+                        let menu = Menu::new("Lapce")
+                            .entry(MenuItem::new("About Lapce"))
+                            .entry(
+                                Menu::new("Settings...")
+                                    .entry(MenuItem::new("Open Settings"))
+                                    .entry(MenuItem::new("Open Keyboard Shortcuts")),
+                            )
+                            .separator();
+                        menu
+                    })
+                })
                 .style(|s| {
                     s.box_shadow_blur(5.0)
                         .border_radius(10.0)
