@@ -111,6 +111,7 @@ pub struct TextInput {
     is_focused: bool,
     last_pointer_down: Point,
     last_cursor_action_on: Instant,
+    pointer_down: Option<Box<dyn Fn()>>
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -126,11 +127,8 @@ pub enum Direction {
     Right,
 }
 
-/// Text Input View
-pub fn text_input(buffer: RwSignal<String>) -> TextInput {
-    let id = ViewId::new();
+pub fn text_input_with_id(buffer: RwSignal<String>, id: ViewId) -> TextInput {
     let is_focused = create_rw_signal(false);
-
     {
         create_effect(move |_| {
             let text = buffer.get();
@@ -167,15 +165,21 @@ pub fn text_input(buffer: RwSignal<String>) -> TextInput {
         is_focused: false,
         last_pointer_down: Point::ZERO,
         last_cursor_action_on: Instant::now(),
+        pointer_down: None,
     }
-    .keyboard_navigable()
-    .on_event_stop(EventListener::FocusGained, move |_| {
-        is_focused.set(true);
-    })
-    .on_event_stop(EventListener::FocusLost, move |_| {
-        is_focused.set(false);
-    })
-    .class(TextInputClass)
+        .keyboard_navigable()
+        .on_event_stop(EventListener::FocusGained, move |_| {
+            is_focused.set(true);
+        })
+        .on_event_stop(EventListener::FocusLost, move |_| {
+            is_focused.set(false);
+        })
+        .class(TextInputClass)
+}
+/// Text Input View
+pub fn text_input(buffer: RwSignal<String>) -> TextInput {
+    let id = ViewId::new();
+    text_input_with_id(buffer, id)
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -577,6 +581,10 @@ impl TextInput {
         AttrsList::new(attrs)
     }
 
+    pub fn pointer_down(mut self, fun: impl Fn() + 'static) -> Self {
+        self.pointer_down = Some(Box::new(fun));
+        self
+    }
     pub fn get_text_attrs(&self) -> AttrsList {
         let mut attrs = Attrs::new().color(self.style.color().unwrap_or(palette::css::BLACK));
 
@@ -1087,6 +1095,9 @@ impl View for TextInput {
                     self.cursor_glyph_idx = self.get_box_position(event.pos.x, event.pos.y);
                     self.selection = None;
                 }
+                self.pointer_down.as_ref().map(|x| {
+                    x()
+                });
                 true
             }
             Event::PointerMove(event) => {
