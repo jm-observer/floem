@@ -72,6 +72,13 @@ impl Scope {
         with_scope(self, || create_rw_signal(value))
     }
 
+    pub fn create_rw_signal_with_track<T>(self, value: T) -> RwSignal<T>
+    where
+        T: Any + 'static,
+    {
+        with_scope(self, || crate::signal::create_rw_signal_with_track(value))
+    }
+
     /// Create a Memo under this Scope
     pub fn create_memo<T>(self, f: impl Fn(Option<&T>) -> T + 'static) -> Memo<T>
     where
@@ -80,9 +87,28 @@ impl Scope {
         with_scope(self, || create_memo(f))
     }
 
+    /// Create a new Signal under this Scope
+    pub fn create_memo_with_track<T>(self, f: impl Fn(Option<&T>) -> T + 'static) -> Memo<T>
+    where
+        T: PartialEq + 'static,
+    {
+        with_scope(self, || crate::memo::create_memo_with_track(f))
+    }
+
     /// Create a Trigger under this Scope
     pub fn create_trigger(self) -> Trigger {
         with_scope(self, create_trigger)
+    }
+
+    /// Create a new Signal under this Scope
+    pub fn create_signal_with_track<T>(self, value: T) -> (ReadSignal<T>, WriteSignal<T>)
+    where
+        T: Any + 'static,
+    {
+        with_scope(self, || {
+            let signal = crate::signal::create_rw_signal_with_track(value);
+            (signal.read_only(), signal.write_only())
+        })
     }
 
     /// Create effect under this Scope
