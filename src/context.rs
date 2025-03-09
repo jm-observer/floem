@@ -18,7 +18,7 @@ use web_time::{Duration, Instant};
 use crossbeam::channel::Receiver;
 #[cfg(not(feature = "crossbeam"))]
 use std::sync::mpsc::Receiver;
-
+use slotmap::Key;
 use taffy::prelude::NodeId;
 
 use crate::animate::{AnimStateKind, RepeatMode};
@@ -153,6 +153,8 @@ impl EventCx<'_> {
                         self.app_state.update_focus(view_id, false);
                     }
                 }
+                // println!("PointerDown  by  {}", view_id.data().as_ffi());
+
             }
             return (EventPropagation::Stop, PointerEventConsumed::Yes);
         }
@@ -168,9 +170,11 @@ impl EventCx<'_> {
                 let (event_propagation, pointer_event_consumed) =
                     self.unconditional_view_event(child, event.clone(), false);
                 if event_propagation.is_processed() {
+                    // println!("PointerDown 1 by {}", child.data().as_ffi());
                     return (EventPropagation::Stop, PointerEventConsumed::Yes);
                 }
                 if event.is_pointer() && pointer_event_consumed == PointerEventConsumed::Yes {
+                    // println!("pointer_event_consumed 2 by child {}", child.data().as_ffi());
                     // if a child's pointer event was consumed because pointer-events: auto
                     // we don't pass the pointer event the next child
                     // also, we mark pointer_event_consumed to be yes
@@ -188,6 +192,7 @@ impl EventCx<'_> {
                 .event_after_children(self, &event)
                 .is_processed()
         {
+            // println!("event_after_children 1 by {}", view_id.data().as_ffi());
             return (EventPropagation::Stop, PointerEventConsumed::Yes);
         }
 
@@ -233,6 +238,7 @@ impl EventCx<'_> {
                             let popout_menu = view_state.borrow().popout_menu.clone();
                             if let Some(menu) = popout_menu {
                                 show_context_menu(menu(), Some(bottom_left));
+                                // println!("show_context_menu 1 by {}", view_id.data().as_ffi());
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                             if self.app_state.draggable.contains(&view_id)
@@ -363,6 +369,7 @@ impl EventCx<'_> {
                                     handled | (handler.borrow_mut())(&event).is_processed()
                                 })
                             {
+                                // println!("PointerUp 1 by {}", view_id.data().as_ffi());
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                         }
@@ -375,6 +382,7 @@ impl EventCx<'_> {
                                     handled | (handler.borrow_mut())(&event).is_processed()
                                 })
                             {
+                                // println!("PointerUp 2 by {}", view_id.data().as_ffi());
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                         }
@@ -383,6 +391,7 @@ impl EventCx<'_> {
                             .apply_event(&EventListener::PointerUp, &event)
                             .is_some_and(|prop| prop.is_processed())
                         {
+                            // println!("PointerUp apply_event by {}", view_id.data().as_ffi());
                             return (EventPropagation::Stop, PointerEventConsumed::Yes);
                         }
                     } else if pointer_event.button.is_secondary() {
@@ -399,6 +408,7 @@ impl EventCx<'_> {
                                     handled | (handler.borrow_mut())(&event).is_processed()
                                 })
                             {
+                                // println!("PointerUp last_pointer_down by {}", view_id.data().as_ffi());
                                 return (EventPropagation::Stop, PointerEventConsumed::Yes);
                             }
                         }
@@ -413,6 +423,7 @@ impl EventCx<'_> {
                         let context_menu = view_state.borrow().context_menu.clone();
                         if let Some(menu) = context_menu {
                             show_context_menu(menu(), Some(viewport_event_position));
+                            // println!("PointerUp show_context_menu by {}", view_id.data().as_ffi());
                             return (EventPropagation::Stop, PointerEventConsumed::Yes);
                         }
                     }
@@ -446,13 +457,14 @@ impl EventCx<'_> {
                             handled | (handler.borrow_mut())(&event).is_processed()
                         })
                     {
+                        // println!("event_listeners by {}", view_id.data().as_ffi());
                         return (EventPropagation::Stop, PointerEventConsumed::Yes);
                     }
                 }
             }
         }
 
-        (EventPropagation::Continue, PointerEventConsumed::Yes)
+        (EventPropagation::Continue, PointerEventConsumed::No)
     }
 
     /// translate a window-positioned event to the local coordinate system of a view
